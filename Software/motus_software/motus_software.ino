@@ -19,10 +19,12 @@
 #define _BV(bit) (1 << (bit))
 #endif
 
-PCA9685 pca_0(0x40);
-PCA9685 pca_1(0x41);
-PCA9685 pca_2(0x42);
-PCA9685 pca_3(0x43);
+PCA9685 pca[4] = {
+  PCA9685(0x40, PCA9685_MODE_LED_DIRECT, 800.0),
+  PCA9685(0x41, PCA9685_MODE_LED_DIRECT, 800.0),
+  PCA9685(0x42, PCA9685_MODE_LED_DIRECT, 800.0),
+  PCA9685(0x43, PCA9685_MODE_LED_DIRECT, 800.0)
+};
 
 Adafruit_MPR121 cap = Adafruit_MPR121();
 MCP23017 mcp = MCP23017(0x20);
@@ -30,22 +32,46 @@ Encoder enc(23, 22);
 LiquidCrystal lcd(lcd_rs, lcd_rw, lcd_enable, lcd_d4, lcd_d5, lcd_d6, lcd_d7);
 
 //mpr data init
-int stored_data[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int stored_data[12] = {
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  };
 int max_index = 0;
 int max_value = 0;
-float centroid = 0;
+int centroid = 0;
 int touchState = 0;
 
 //encoder data
 int current_value;
 int previous_value;
 
+int led_index[48] = {
+  5, 4, 3, 2, 1, 0,
+  11, 10, 9, 8, 7, 6,
+  1, 0, 15, 14, 13, 12,
+  7, 6, 5, 4, 3, 2,
+  13, 12, 11, 10, 9, 8,
+  3, 2, 1, 0, 15, 14,
+  9, 8, 7, 6, 5, 4,
+  15, 14, 13, 12, 11, 10
+};
+
+int pca_index[48] = {
+  0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0,
+  1, 1, 0, 0, 0, 0,
+  1, 1, 1, 1, 1, 1,
+  1, 1, 1, 1, 1, 1, 
+  2, 2, 2, 2, 1, 1,
+  2, 2, 2, 2, 2, 2,
+  2, 2, 2, 2, 2, 2
+};
 
 void setup() {
-  Wire.setClock(400000);
+
+  Wire.setClock(100000);
   Wire.begin();
 
-  Serial.begin(115200);
+  Serial.begin(9600);
 
   //initialize MCP23018 GPIO Expander as 16 outputs
   mcp.init();
@@ -57,107 +83,37 @@ void setup() {
     mcp.digitalWrite(i, HIGH);
   }
 
-  // Default address is 0x5A, if tied to 3.3V its 0x5B
+  //Default address is 0x5A, if tied to 3.3V its 0x5B
   if (!cap.begin(0x5B)) {
     Serial.println("MPR121 not found, check wiring?");
     while (1);
   }
   cap.begin(0x5A);
+
   delay(10);
+ 
+  //initialize LED drivers
+  for (int i = 0; i < 4; i++) {
+    
+    pca[i].setup();
+
+    for (int j = 0; j < 16; j++){
+      pca[i].getPin(j).fullOffAndWrite();
+    } 
+  }
+
   //Serial.println("MPR121 found!");
 
-  // set up the LCD's number of columns and rows:
+  //set up the LCD's number of columns and rows:
   lcd.begin(8, 2);
-  // Print a message to the LCD.
+  //Print a message to the LCD.
   //lcd.autoscroll();
-  lcd.print("henlo :)");
-
-  pca_0.begin();
-  pca_1.begin();
-  pca_2.begin();
-  pca_0.setFrequency(200);
-  pca_1.setFrequency(200);
-  pca_2.setFrequency(200);
-  delay(100);
-  pca_0.setChannels8bit(0, 15, 0);
-  pca_1.setChannels8bit(0, 15, 0);
-  pca_2.setChannels8bit(0, 15, 0);
+  lcd.print("hello");
 
 }
 
-void slider_led(int slider_channel, int value) {
-  int ledsFullyOn;
-  float ledDimValue;
-  int ledStart;
-  int newLedCh;
-
-  ledsFullyOn = value / 170;
-  ledDimValue = 1.5 * (float) (value % 170);
-
-  if (slider_channel == 0) {
-    ledStart = 0;
-    pca_0.setChannels8bit(ledStart, ledsFullyOn, 255);
-    pca_0.setChannels8bit(ledStart, ledsFullyOn + 1, (int)ledDimValue);
-  }
-
-  else if (slider_channel == 1) {
-    ledStart = 6;
-    pca_0.setChannels8bit(ledStart, ledsFullyOn, 255);
-    pca_0.setChannels8bit(ledStart, ledsFullyOn + 1, (int)ledDimValue);
-  }
-
-  else if (slider_channel == 2) {
-    ledStart = 12;
-    pca_0.setChannels8bit(ledStart, ledsFullyOn, 255);
-    pca_0.setChannels8bit(ledStart, ledsFullyOn + 1, (int)ledDimValue);
-
-    newLedCh = (ledStart + ledsFullyOn) % 16;
-
-    if (newLedCh < 6) {
-      pca_1.setChannels8bit(0, newLedCh, 255);
-      pca_1.setChannels8bit(0, newLedCh + 1, (int)ledDimValue);
-    }
-  }
-
-  else if (slider_channel == 3) {
-    ledStart = 2;
-    pca_1.setChannels8bit(ledStart, ledsFullyOn, 255);
-    pca_1.setChannels8bit(ledStart, ledsFullyOn + 1, (int)ledDimValue);
-  }
-
-  else if (slider_channel == 4) {
-    ledStart = 8;
-    pca_1.setChannels8bit(ledStart, ledsFullyOn, 255);
-    pca_1.setChannels8bit(ledStart, ledsFullyOn + 1, (int)ledDimValue);
-  }
-
-  else if (slider_channel == 5) {
-    ledStart = 14;
-    pca_1.setChannels8bit(ledStart, ledsFullyOn, 255);
-    pca_1.setChannels8bit(ledStart, ledsFullyOn + 1, (int)ledDimValue);
-
-    newLedCh = (ledStart + ledsFullyOn) % 16;
-
-    if (newLedCh < 6) {
-      pca_2.setChannels8bit(0, newLedCh, 255);
-      pca_2.setChannels8bit(0, newLedCh + 1, (int)ledDimValue);
-    }
-  }
-
-  else if (slider_channel == 6) {
-    ledStart = 4;
-    pca_2.setChannels8bit(ledStart, ledsFullyOn, 255);
-    pca_2.setChannels8bit(ledStart, ledsFullyOn + 1, (int)ledDimValue);
-  }
-
-  else if (slider_channel == 7) {
-    ledStart = 10;
-    pca_2.setChannels8bit(ledStart, ledsFullyOn, 255);
-    pca_2.setChannels8bit(ledStart, ledsFullyOn + 1, (int)ledDimValue);
-  }
-
-}
-
+/////////check for touched pad/////////
+/*
 void mpr_read1(int mpr_channel) {
   mcp.digitalWrite(mpr_channel, LOW);
   touchState = cap.touched();
@@ -172,16 +128,17 @@ void mpr_read1(int mpr_channel) {
     lcd.print(mpr_channel);
   }
   mcp.digitalWrite(mpr_channel, HIGH);
-}
+}*/
 
 void mpr_read(int mpr_channel) {
+
   mcp.digitalWrite(mpr_channel, LOW);
   touchState = cap.touched();
 
   if (touchState) {
     max_value = 0;
     for (int i = 0 ; i < 12 ; i++) {
-      stored_data[i] = (1024 - cap.filteredData(i));
+      stored_data[i] = (900 - cap.filteredData(i));
       //check maximum signal segment
       if (stored_data[i] > max_value) {
         max_value = stored_data[i];
@@ -194,19 +151,44 @@ void mpr_read(int mpr_channel) {
                   + max_index )
                 * 85.0;//( 1024.0 / (12.0 - 1.0));
 
-    slider_led(mpr_channel, (int) centroid);
+    slider_led(mpr_channel, centroid);
     //Serial.println(centroid);/*
     lcd.setCursor(4, 1);
     lcd.print(F("    "));
     lcd.setCursor(4, 1);
-    lcd.print((int)centroid);
+    lcd.print(centroid);
     lcd.setCursor(0, 1);
     lcd.print(F("CH  "));
     lcd.setCursor(2, 1);
     lcd.print(mpr_channel);
+
+    usbMIDI.sendControlChange(mpr_channel, centroid / 8, 1);
   }
 
   mcp.digitalWrite(mpr_channel, HIGH);
+}
+
+void slider_led(int slider_channel, int value) {
+  
+  float divValue = value / 170.0; //10bit value divided by 6 (1024 / 170.66 )
+  int fullLed = (int)divValue;
+  float frac = divValue - fullLed;
+  int dimLed = frac * (float)4095; //scale fractional part to 8bit PWM value
+  int ledStart = slider_channel * 6;
+  int ledEnd = ledStart + fullLed;
+
+  //clear slider leds
+  for (int pos = ledStart ; pos < (ledStart + 6) ; pos++){
+      pca[pca_index[pos]].getPin(led_index[pos]).fullOffAndWrite();
+    }
+
+  //write full slider leds
+  for (int pos = ledStart ; pos < ledEnd + 1 ; pos++){
+    pca[pca_index[pos]].getPin(led_index[pos]).fullOnAndWrite();
+  }
+
+  //write dim slider leds
+  pca[pca_index[ledEnd + 1]].getPin(led_index[ledEnd + 1]).setValueAndWrite(dimLed);
 }
 
 void enc_update() {
@@ -229,7 +211,7 @@ void enc_update() {
 
 void loop() {
   enc_update();
-  delay(10);
+  //delay(10);
   for (int i = 0; i < 8; i++) {
     mpr_read(i);
   }
