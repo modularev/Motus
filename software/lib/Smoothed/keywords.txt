@@ -1,0 +1,36 @@
+#######################################
+# SMOOTHED
+# Syntax Coloring Map
+#######################################
+
+#######################################
+# Datatypes (DATA_TYPE)
+#######################################
+# 3 tabs required to make it bold?
+
+#######################################
+# Classes & Namespaces (KEYWORD1)
+#######################################
+
+Smoothed	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+begin	KEYWORD2
+add	KEYWORD2
+get	KEYWORD2
+getLast	KEYWORD2
+clear	KEYWORD2
+
+#######################################
+# Instances (KEYWORD3)
+#######################################
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+SMOOTHED_AVERAGE	LITERAL1
+SMOOTHED_EXPONENTIAL	LITERAL1
