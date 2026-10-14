@@ -1,23 +1,59 @@
-// led.cpp
-#include "led.h"
+#include "Motus/led.h"
 
-uint16_t padLedVal[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+#include <Arduino.h>
+#include <PCA9685.h>
 
-PCA9685 ledDriver[4] = {
-    PCA9685(0x40, PCA9685_MODE_LED_DIRECT, 800.0),
-    PCA9685(0x41, PCA9685_MODE_LED_DIRECT, 800.0),
-    PCA9685(0x42, PCA9685_MODE_LED_DIRECT, 800.0),
-    PCA9685(0x43, PCA9685_MODE_LED_DIRECT, 800.0)};
+#include "Motus/config.h"
 
-void led_setup()
+// weird pinrouting because of hardware
+static const int ledEnum[NUM_SLIDERS * LEDS_PER_SLIDER] = {
+    5, 4, 3, 2, 1, 0,
+    11, 10, 9, 8, 7, 6,
+    1, 0, 15, 14, 13, 12,
+    7, 6, 5, 4, 3, 2,
+    13, 12, 11, 10, 9, 8,
+    3, 2, 1, 0, 15, 14,
+    9, 8, 7, 6, 5, 4,
+    15, 14, 13, 12, 11, 10};
+
+static const int ledBus[NUM_SLIDERS * LEDS_PER_SLIDER] = {
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0,
+    1, 1, 0, 0, 0, 0,
+    1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1,
+    2, 2, 2, 2, 1, 1,
+    2, 2, 2, 2, 2, 2,
+    2, 2, 2, 2, 2, 2};
+
+// LED numeration for XY pad on hardware layout
+// note: XY pad #2 is 180° turned
+// 5-----7-----6
+// |-----|-----|
+// 0-----|-----4
+// |-----|-----|
+// 1-----2-----3
+static const float padLedX[LEDS_PER_PAD] = {0, 0, 0.5, 1, 1, 0, 1, 0.5};
+static const float padLedY[LEDS_PER_PAD] = {0.5, 0, 0, 0, 0.5, 1, 1, 1};
+
+static const float PAD_LED_RADIUS = 0.8f; // reach of each LED, in pad widths
+static const int PAD_LED_MAX = 2047;      // 12bit PWM value at the finger
+
+static PCA9685 ledDriver[NUM_LED_DRIVERS] = {
+    PCA9685(LED_DRIVER_ADDR[0], PCA9685_MODE_LED_DIRECT, 800.0),
+    PCA9685(LED_DRIVER_ADDR[1], PCA9685_MODE_LED_DIRECT, 800.0),
+    PCA9685(LED_DRIVER_ADDR[2], PCA9685_MODE_LED_DIRECT, 800.0),
+    PCA9685(LED_DRIVER_ADDR[3], PCA9685_MODE_LED_DIRECT, 800.0)};
+
+void ledSetup()
 {
     // initialize LED drivers
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < NUM_LED_DRIVERS; i++)
     {
 
         ledDriver[i].setup();
 
-        for (int j = 0; j < 16; j++)
+        for (int j = 0; j < LEDS_PER_DRIVER; j++)
         {
             ledDriver[i].getPin(j).fullOffAndWrite();
         }
@@ -32,11 +68,11 @@ void setSliderLED(int slider_channel, int value)
     int fullLed = (int)divValue;
     float frac = divValue - fullLed;
     int dimLed = frac * (float)4095; // scale fractional part to 12bit PWM value
-    int ledStart = slider_channel * 6;
+    int ledStart = slider_channel * LEDS_PER_SLIDER;
     int ledEnd = ledStart + fullLed;
 
     // clear slider leds
-    for (int pos = ledStart; pos < (ledStart + 6); pos++)
+    for (int pos = ledStart; pos < (ledStart + LEDS_PER_SLIDER); pos++)
     {
         ledDriver[ledBus[pos]].getPin(ledEnum[pos]).fullOffAndWrite();
     }
@@ -54,56 +90,29 @@ void setSliderLED(int slider_channel, int value)
         ledDriver[ledBus[ledEnd]].getPin(ledEnum[ledEnd]).setValueAndWrite(dimLed);
 }
 
-void setXYPadLED(int sensorChan, int xAxis, int yAxis)
+// x and y are pad-local, 10 bit
+void setXYPadLED(int channel, int xAxis, int yAxis)
 {
     // account pca pin offset in second XY pad
     int padLedOffset = 0;
-    if (sensorChan == 9)
-        padLedOffset = 8;
+    if (channel == NUM_SLIDERS + 1)
+        padLedOffset = LEDS_PER_PAD;
 
-    memset(padLedVal, 0, sizeof(padLedVal));
+    float x = constrain(xAxis, 0, 1023) / 1023.0f;
+    float y = constrain(yAxis, 0, 1023) / 1023.0f;
 
-    // bottom left
-    if (xAxis < 256 && yAxis < 256)
+    // each LED fades with its distance to the finger, so the LEDs around the
+    // finger share the light and the center of the pad is a soft even glow
+    for (int i = 0; i < LEDS_PER_PAD; i++)
     {
-        padLedVal[1] = (255 - xAxis) * (255 - yAxis);
-        padLedVal[0] = (255 - xAxis) * (yAxis);
-        padLedVal[2] = (xAxis) * (255 - yAxis);
-    }
+        float dx = x - padLedX[i];
+        float dy = y - padLedY[i];
+        float level = 1.0f - sqrtf(dx * dx + dy * dy) / PAD_LED_RADIUS;
+        if (level < 0)
+            level = 0;
 
-    // top left
-    else if (xAxis < 256 && yAxis > 255)
-    {
-        yAxis = (yAxis >> 1);
-
-        padLedVal[5] = (255 - xAxis) * (yAxis);
-        padLedVal[0] = (255 - xAxis) * (255 - yAxis);
-        padLedVal[7] = (xAxis) * (yAxis);
-    }
-
-    // bottom right
-    else if (xAxis > 255 && yAxis < 256)
-    {
-        xAxis = (xAxis >> 1);
-
-        padLedVal[3] = (xAxis) * (255 - yAxis);
-        padLedVal[4] = (xAxis) * (yAxis);
-        padLedVal[2] = (255 - xAxis) * (255 - yAxis);
-    }
-
-    // top right
-    else if (xAxis > 255 && yAxis > 255)
-    {
-        xAxis = (xAxis >> 1);
-        yAxis = (yAxis >> 1);
-
-        padLedVal[6] = (xAxis) * (yAxis);
-        padLedVal[4] = (255 - xAxis) * (255 - yAxis);
-        padLedVal[7] = (xAxis) * (yAxis);
-    }
-
-    for (int i = 0; i < 8; i++)
-    {
-        ledDriver[3].getPin(i + padLedOffset).setValueAndWrite(padLedVal[i] >> 5);
+        // squared for a more even perceived fade
+        int value = level * level * PAD_LED_MAX;
+        ledDriver[PAD_LED_DRIVER].getPin(i + padLedOffset).setValueAndWrite(value);
     }
 }

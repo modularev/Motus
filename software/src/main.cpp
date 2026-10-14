@@ -1,27 +1,72 @@
 #include <Arduino.h>
-#include <Encoder.h>
-#include <LiquidCrystal.h>
 #include <Wire.h>
-#include "sensor-processing.h"
+
+#include "Motus/analogout.h"
+#include "Motus/config.h"
+#include "Motus/display.h"
+#include "Motus/led.h"
+#include "Motus/presets.h"
+#include "Motus/sensors.h"
 
 void setup()
 {
     Wire.begin();
-    dac_setup();
-    led_setup();
+    dacSetup();
+    ledSetup();
     sensorSetup();
-    display_setup();
-    Wire.setClock(3400000);
+    displaySetup();
+    presetsSetup();
+    Wire.setClock(I2C_CLOCK_HZ);
+}
 
-    for (int i = 0; i < 9; i++)
+// read one sensor and route its values to gate, DAC, LEDs and display
+static void updateChannel(int channel)
+{
+    TouchReading reading = sensorRead(channel);
+    setGate(channel, reading.touched);
+
+    if (!reading.touched)
+        setPressDAC(channel, 0);
+
+    // on release the outputs are set once more, to the value from before lifting
+    if (!reading.touched && !reading.released)
+        return;
+
+    if (isSlider(channel))
     {
-        pinMode(gate_pin[i], OUTPUT);
-        digitalWrite(gate_pin[i], HIGH);
+        if (reading.started)
+            presetsSelect(channel);
+        setSliderDAC(channel, reading.position);
+        if (reading.touched)
+            setPressDAC(channel, reading.pressure);
+        setSliderLED(channel, reading.position);
+        setMaster(reading.position, reading.pressure);
+        displaySlider(channel, reading.position, reading.pressure);
     }
+    else
+    {
+        setXYPadLED(channel, reading.x, reading.y);
+
+        // INVERT BECAUSE OF CHANNEL LAYOUT (second pad is 180° turned)
+        if (channel == NUM_SLIDERS + 1)
+        {
+            reading.x = 1023 - reading.x;
+            reading.y = 1023 - reading.y;
+        }
+        setXYPadDAC(channel, reading.x, reading.y);
+        if (reading.touched)
+            setPressDAC(channel, reading.pressure); // Z1 / Z2
+        displayPad(channel, reading.x, reading.y);
+    }
+    // usbMIDI.sendControlChange(channel, reading.position / 8, 1);
 }
 
 void loop()
 {
-    enc_update();
-    sensorCheck();
+    for (int channel = 0; channel < NUM_SENSORS; channel++)
+    {
+        updateChannel(channel);
+    }
+    presetsUpdate(buttonsRead());
+    displayUpdate();
 }
