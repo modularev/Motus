@@ -115,20 +115,13 @@ void setMaster(int pos_10bit, int force_9bit)
 void setGate(int channel, bool touchState)
 {
     // SET PIN LOW FOR NPN OFF / HIGH FOR DRIVING PNP NPN PULLING JACK LOW
-    if (touchState)
-    {
-        if (channel < NUM_SLIDERS)
-        {
-            digitalWrite(GATE_PINS[channel], LOW);
-            digitalWrite(MASTER_GATE_PIN, LOW);
-        }
-    }
-    else
-    {
-        if (channel < NUM_SLIDERS)
-            digitalWrite(GATE_PINS[channel], HIGH);
-        digitalWrite(MASTER_GATE_PIN, HIGH);
-    }
+    if (channel < NUM_SLIDERS)
+        digitalWrite(GATE_PINS[channel], touchState ? LOW : HIGH);
+}
+
+void setMasterGate(bool touchState)
+{
+    digitalWrite(MASTER_GATE_PIN, touchState ? LOW : HIGH);
 }
 
 void setVarDAC(int var, int value_12bit)

@@ -19,8 +19,9 @@ void setup()
     Wire.setClock(I2C_CLOCK_HZ);
 }
 
-// read one sensor and route its values to gate, DAC, LEDs and display
-static void updateChannel(int channel)
+// read one sensor and route its values to gate, DAC, LEDs and display;
+// returns whether it is touched
+static bool updateChannel(int channel)
 {
     TouchReading reading = sensorRead(channel);
     setGate(channel, reading.touched);
@@ -30,7 +31,7 @@ static void updateChannel(int channel)
 
     // on release the outputs are set once more, to the value from before lifting
     if (!reading.touched && !reading.released)
-        return;
+        return false;
 
     if (isSlider(channel))
     {
@@ -59,14 +60,19 @@ static void updateChannel(int channel)
         displayPad(channel, reading.x, reading.y);
     }
     // usbMIDI.sendControlChange(channel, reading.position / 8, 1);
+    return reading.touched;
 }
 
 void loop()
 {
+    bool anySliderTouched = false;
     for (int channel = 0; channel < NUM_SENSORS; channel++)
     {
-        updateChannel(channel);
+        bool touched = updateChannel(channel);
+        if (isSlider(channel) && touched)
+            anySliderTouched = true;
     }
+    setMasterGate(anySliderTouched);
     presetsUpdate(buttonsRead());
     displayUpdate();
 }
