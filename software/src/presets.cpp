@@ -8,22 +8,6 @@
 #include "config.h"
 #include "display.h"
 
-enum Button
-{
-    BUTTON_SET_1,
-    BUTTON_SET_2,
-    BUTTON_SET_3,
-    BUTTON_SET_4,
-    BUTTON_FINE,
-    BUTTON_HOLD,
-    BUTTON_LOAD,
-    BUTTON_SAVE,
-    NUM_BUTTONS
-};
-
-// button sensor electrode of each button
-static const uint8_t BUTTON_ELECTRODE[NUM_BUTTONS] = {0, 1, 2, 3, 4, 5, 6, 7};
-
 // Encoder: while a set pad is held, each detent changes that var by a step
 static const int ENC_COUNTS_PER_DETENT = 4;
 static const int COARSE_STEP = 16;          // DAC counts (of 4095) per detent
@@ -45,18 +29,14 @@ static uint16_t presets[NUM_PRESETS][NUM_VARS];
 static uint16_t outputs[NUM_VARS];
 static int selected = 0;
 static bool fine = false;
-static bool hold = false;
 
 static uint8_t lastButtons = 0;
 static int32_t encConsumed = 0;
 static elapsedMillis sinceDetent;
 
-// set the var outputs to the selected preset, unless hold freezes them
+// set the var outputs to the selected preset
 static void writeOutputs(bool force)
 {
-    if (hold && !force)
-        return;
-
     for (int var = 0; var < NUM_VARS; var++)
     {
         if (force || outputs[var] != presets[selected][var])
@@ -100,24 +80,13 @@ void presetsSelect(int slider)
     writeOutputs(false);
 }
 
-void presetsUpdate(uint16_t buttonElectrodes)
+void presetsUpdate(uint8_t buttons)
 {
-    uint8_t buttons = 0;
-    for (int b = 0; b < NUM_BUTTONS; b++)
-    {
-        if (buttonElectrodes & (1 << BUTTON_ELECTRODE[b]))
-            buttons |= (1 << b);
-    }
     uint8_t pressed = buttons & ~lastButtons;
     lastButtons = buttons;
 
     if (pressed & (1 << BUTTON_FINE))
         fine = !fine;
-    if (pressed & (1 << BUTTON_HOLD))
-    {
-        hold = !hold;
-        writeOutputs(false);
-    }
     if (pressed & (1 << BUTTON_LOAD))
     {
         loadPresets();
@@ -157,6 +126,6 @@ void presetsUpdate(uint16_t buttonElectrodes)
     }
 
     if (editing >= 0)
-        displayEdit(selected, editing, presets[selected][editing], fine, hold);
-    displayStatus(selected, fine, hold);
+        displayEdit(selected, editing, presets[selected][editing]);
+    displayStatus(selected, fine);
 }

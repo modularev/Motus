@@ -15,6 +15,22 @@ constexpr int ELECTRODES_PER_PAD_AXIS = 6;
 constexpr int NUM_SENSOR_SELECT_LINES = 11;
 constexpr int BUTTON_SENSOR = 10; // touch buttons: set 1-4, fine, hold, load, save
 
+enum Button
+{
+    BUTTON_SET_1,
+    BUTTON_SET_2,
+    BUTTON_SET_3,
+    BUTTON_SET_4,
+    BUTTON_FINE,
+    BUTTON_HOLD,
+    BUTTON_LOAD,
+    BUTTON_SAVE,
+    NUM_BUTTONS
+};
+
+// button sensor electrode of each button
+constexpr uint8_t BUTTON_ELECTRODE[NUM_BUTTONS] = {0, 1, 2, 3, 4, 5, 6, 7};
+
 // LEDs
 constexpr int NUM_LED_DRIVERS = 4;
 constexpr int LEDS_PER_DRIVER = 16;

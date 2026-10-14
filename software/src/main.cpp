@@ -6,6 +6,7 @@
 #include "display.h"
 #include "led.h"
 #include "presets.h"
+#include "recorder.h"
 #include "sensors.h"
 
 void setup()
@@ -19,60 +20,110 @@ void setup()
     Wire.setClock(I2C_CLOCK_HZ);
 }
 
-// read one sensor and route its values to gate, DAC, LEDs and display;
-// returns whether it is touched
+static const uint32_t LOOP_LED_INTERVAL_MS = 20; // LED updates of looping controls, to keep the I2C bus free
+
+// the slider on the master outputs: the last one touched
+static int masterSlider = -1;
+
+static bool loopLedDue(int channel)
+{
+    static uint32_t lastLedMs[NUM_SENSORS];
+    if (millis() - lastLedMs[channel] < LOOP_LED_INTERVAL_MS)
+        return false;
+    lastLedMs[channel] = millis();
+    return true;
+}
+
+static void outputSlider(int channel, int position, int pressure, bool gate, bool updateLed)
+{
+    setGate(channel, gate);
+    setSliderDAC(channel, position);
+    setPressDAC(channel, pressure);
+    if (updateLed)
+        setSliderLED(channel, position);
+    if (channel == masterSlider)
+        setMaster(position, pressure);
+}
+
+// x and y are pad-local; the outputs are as seen from the playing position
+static void outputPad(int channel, int x, int y, int pressure, bool updateLed)
+{
+    if (updateLed)
+        setXYPadLED(channel, x, y);
+
+    // INVERT BECAUSE OF CHANNEL LAYOUT (second pad is 180° turned)
+    if (channel == NUM_SLIDERS + 1)
+    {
+        x = 1023 - x;
+        y = 1023 - y;
+    }
+    setXYPadDAC(channel, x, y);
+    setPressDAC(channel, pressure); // Z1 / Z2
+}
+
+// read one sensor and route its values, live or from a recording, to the
+// outputs, LEDs and display; returns whether its gate is on
 static bool updateChannel(int channel)
 {
     TouchReading reading = sensorRead(channel);
-    setGate(channel, reading.touched);
+    bool slider = isSlider(channel);
 
-    if (!reading.touched)
-        setPressDAC(channel, 0);
+    if (reading.started && slider)
+    {
+        presetsSelect(channel);
+        masterSlider = channel;
+    }
+
+    Playback playback;
+    if (recorderChannel(channel, reading, playback))
+    {
+        bool led = loopLedDue(channel);
+        if (slider)
+            outputSlider(channel, playback.position, playback.pressure, playback.gate, led);
+        else
+            outputPad(channel, playback.position, playback.y, playback.pressure, led);
+        return slider && playback.gate;
+    }
 
     // on release the outputs are set once more, to the value from before lifting
     if (!reading.touched && !reading.released)
-        return false;
-
-    if (isSlider(channel))
     {
-        if (reading.started)
-            presetsSelect(channel);
-        setSliderDAC(channel, reading.position);
-        if (reading.touched)
-            setPressDAC(channel, reading.pressure);
-        setSliderLED(channel, reading.position);
-        setMaster(reading.position, reading.pressure);
-        displaySlider(channel, reading.position, reading.pressure);
+        setGate(channel, false);
+        setPressDAC(channel, 0);
+        return false;
+    }
+
+    int pressure = reading.touched ? reading.pressure : 0;
+    bool recording = recorderIsRecording(channel);
+    if (slider)
+    {
+        outputSlider(channel, reading.position, pressure, reading.touched, true);
+        displaySlider(channel, reading.position, pressure, recording);
     }
     else
     {
-        setXYPadLED(channel, reading.x, reading.y);
-
-        // INVERT BECAUSE OF CHANNEL LAYOUT (second pad is 180° turned)
-        if (channel == NUM_SLIDERS + 1)
-        {
-            reading.x = 1023 - reading.x;
-            reading.y = 1023 - reading.y;
-        }
-        setXYPadDAC(channel, reading.x, reading.y);
-        if (reading.touched)
-            setPressDAC(channel, reading.pressure); // Z1 / Z2
-        displayPad(channel, reading.x, reading.y);
+        outputPad(channel, reading.x, reading.y, pressure, true);
+        bool flipped = channel == NUM_SLIDERS + 1;
+        displayPad(channel, flipped ? 1023 - reading.x : reading.x, flipped ? 1023 - reading.y : reading.y, recording);
     }
     // usbMIDI.sendControlChange(channel, reading.position / 8, 1);
-    return reading.touched;
+    return slider && reading.touched;
 }
 
 void loop()
 {
-    bool anySliderTouched = false;
+    // master gate: on while any slider is touched or looping with its gate on
+    bool anySliderGate = false;
     for (int channel = 0; channel < NUM_SENSORS; channel++)
     {
-        bool touched = updateChannel(channel);
-        if (isSlider(channel) && touched)
-            anySliderTouched = true;
+        bool gate = updateChannel(channel);
+        if (isSlider(channel) && gate)
+            anySliderGate = true;
     }
-    setMasterGate(anySliderTouched);
-    presetsUpdate(buttonsRead());
+    setMasterGate(anySliderGate);
+
+    uint8_t buttons = buttonsRead();
+    presetsUpdate(buttons);
+    recorderUpdate(buttons);
     displayUpdate();
 }

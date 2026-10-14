@@ -10,7 +10,7 @@ Motus is a capacitive touch controller for modular synthesizers. It turns finger
 |---|---|---|
 | Sliders 1–8 | `position`, `force`, `gate` | Position along the slider, pressure of the finger, gate while touched. Position and LEDs hold their value after release. |
 | XY pads 1–2 | `X1` `Y1` `Z1`, `X2` `Y2` `Z2` | Finger position on the pad and its pressure (Z). The pad LEDs glow around the finger. |
-| Master | `m.pos`, `m.force`, `m.gate` | Position and pressure of the last touched slider; gate while any slider is touched. |
+| Master | `m.pos`, `m.force`, `m.gate` | Position and pressure of the last touched slider (live or looping); gate while any slider gate is on. |
 | Presets | `var 1`–`var 4` | Four voltages from one of eight presets, see below. |
 
 The display shows the touched slider or pad with its value, the preset value being edited, or the selected preset when idle.
@@ -23,9 +23,16 @@ Each slider has its own preset of four voltages. Touching a slider switches `var
 |---|---|
 | `SET 1`–`SET 4` | Hold and turn the encoder to change that var in the current preset. Turning fast sweeps faster. |
 | `FINE` | Toggle small encoder steps for exact values. |
-| `HOLD` | Toggle: freeze the var outputs, for example while editing. |
 | `SAVE` | Store all eight presets; they are kept over power-off. |
 | `LOAD` | Restore the saved presets, discarding unsaved edits. |
+
+### Two fingers
+
+A second finger on a slider or pad makes the value jump to it; lifting it jumps back. Lifting the first finger instead keeps the value at the second one without ending the touch. Use it for square-wave modulation or to jump to a new value mid-gesture. The fingers need at least one electrode of space between them to count as two.
+
+### Recording
+
+Tap `HOLD` to arm recording (`R` on the display). The next slider or pad you touch is recorded until the last finger lifts, up to 20 seconds: position, force and gate on a slider, X, Y and Z on a pad, including two-finger jumps. It then loops on that control's outputs and LEDs; on a slider the gate drops briefly at the start of every loop to retrigger envelopes. Every slider and pad can loop its own recording at the same time. Touching a looping control stops its loop and it plays live again; tap `HOLD` again while armed to cancel. Recordings are not kept over power-off.
 
 Keep fingers off the touch surfaces while powering up: the firmware measures each electrode's untouched level at start-up.
 
@@ -46,7 +53,7 @@ docs/               panel image
 hardware/           schematic, board, BOM, panel artwork and Gerber files
 software/           firmware (PlatformIO project)
   include/          module headers; config.h holds all pins, addresses and channel counts
-  src/              main.cpp, sensors, presets, analogout (DACs and gates), led, display
+  src/              main.cpp, sensors, presets, recorder, analogout (DACs and gates), led, display
 ```
 
 ## Firmware
@@ -62,7 +69,7 @@ pio run -e teensy40_debug -t upload    # debug build with a serial data stream
 ### How sensing works
 
 - The MPR121s' own baseline tracking is switched off. It absorbs the partial signal on neighbouring electrodes and makes sliding jumpy, so the firmware keeps its own baseline per electrode and tracks it slowly while untouched.
-- Position is the weighted centroid of all electrodes above a noise floor, so it is continuous across electrode boundaries.
+- Position is the weighted centroid of the electrodes under a finger, so it is continuous across electrode boundaries. Separate groups of electrodes are separate fingers.
 - Smoothing adapts to finger speed (a 1€ filter) and adds a little play, so a resting finger stays still while fast moves stay fast. On release, the position from before the finger started lifting is kept.
 - Pressure is measured from the size of the contact, calibrated between a light touch and a firm press. On the sliders, the position shift that pressing causes is compensated.
 

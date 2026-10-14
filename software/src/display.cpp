@@ -21,7 +21,7 @@ static LiquidCrystal lcd(LCD_RS_PIN, LCD_RW_PIN, LCD_ENABLE_PIN, LCD_D4_PIN, LCD
 
 static int statusPreset = 0;
 static bool statusFine = false;
-static bool statusHold = false;
+static bool statusArmed = false;
 
 static char message[LCD_COLS + 1];
 static uint32_t messageUntil = 0;
@@ -71,12 +71,14 @@ static void formatBar(char *row, int value, int maxValue, int cells = LCD_COLS)
     }
 }
 
-void displaySlider(int channel, int position, int pressure)
+void displaySlider(int channel, int position, int pressure, bool recording)
 {
     if (!claimScreen(channel))
         return;
 
     snprintf(wanted[0], sizeof(wanted[0]), "S%u%6d", (unsigned)(channel + 1) % 10, constrain(position, 0, 1023));
+    if (recording)
+        wanted[0][2] = 'R';
 
     // position bar, or pressure bar while pressing
     if (pressure > 0)
@@ -85,33 +87,39 @@ void displaySlider(int channel, int position, int pressure)
         formatBar(wanted[1], position, 1023);
 }
 
-void displayPad(int channel, int x, int y)
+void displayPad(int channel, int x, int y, bool recording)
 {
     if (!claimScreen(channel))
         return;
 
     snprintf(wanted[0], sizeof(wanted[0]), "P%u X%4d", (unsigned)(channel - NUM_SLIDERS + 1) % 10, constrain(x, 0, 1023));
+    if (recording)
+        wanted[0][2] = 'R';
     snprintf(wanted[1], sizeof(wanted[1]), "   Y%4d", constrain(y, 0, 1023));
 }
 
-void displayEdit(int preset, int var, int value, bool fine, bool hold)
+void displayEdit(int preset, int var, int value)
 {
     if (!claimScreen(EDIT_SCREEN))
         return;
 
-    // S3 V2 FH
+    // S3 V2 FR
     // ####4095
     snprintf(wanted[0], sizeof(wanted[0]), "S%u V%u %c%c", (unsigned)(preset + 1) % 10, (unsigned)(var + 1) % 10,
-             fine ? 'F' : ' ', hold ? 'H' : ' ');
+             statusFine ? 'F' : ' ', statusArmed ? 'R' : ' ');
     formatBar(wanted[1], value, 4095, 4);
     snprintf(wanted[1] + 4, sizeof(wanted[1]) - 4, "%4d", constrain(value, 0, 4095));
 }
 
-void displayStatus(int preset, bool fine, bool hold)
+void displayStatus(int preset, bool fine)
 {
     statusPreset = preset;
     statusFine = fine;
-    statusHold = hold;
+}
+
+void displayRecordArmed(bool armed)
+{
+    statusArmed = armed;
 }
 
 void displayMessage(const char *text)
@@ -129,7 +137,7 @@ void displayUpdate()
     if (activeChannel < 0 || millis() - lastSeen[activeChannel] > IDLE_TIMEOUT_MS)
     {
         activeChannel = -1;
-        snprintf(wanted[0], sizeof(wanted[0]), "MOTUS %c%c", statusFine ? 'F' : ' ', statusHold ? 'H' : ' ');
+        snprintf(wanted[0], sizeof(wanted[0]), "MOTUS %c%c", statusFine ? 'F' : ' ', statusArmed ? 'R' : ' ');
         snprintf(wanted[1], sizeof(wanted[1]), "PRESET %u", (unsigned)(statusPreset + 1) % 10);
     }
 
