@@ -45,9 +45,8 @@ The schematic and board are DipTrace files, the panel artwork is an Illustrator 
 docs/               panel image
 hardware/           schematic, board, BOM, panel artwork and Gerber files
 software/           firmware (PlatformIO project)
-  include/Motus/    module headers; config.h holds all pins, addresses and channel counts
+  include/          module headers; config.h holds all pins, addresses and channel counts
   src/              main.cpp, sensors, presets, analogout (DACs and gates), led, display
-  lib/Smoothed/     vendored smoothing library
 ```
 
 ## Firmware

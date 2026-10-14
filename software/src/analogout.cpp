@@ -1,13 +1,13 @@
-#include "Motus/analogout.h"
+#include "analogout.h"
 
 #include <Arduino.h>
 #include <Adafruit_MCP4728.h>
-#include <Smoothed.h>
 #include <TCA9548A.h>
 
-#include "Motus/config.h"
+#include "config.h"
 
-static Smoothed<unsigned int> interpol_pressure[NUM_SENSORS];
+// pressure outputs are smoothed: each new value is averaged with the previous one
+static uint16_t smoothedPressure[NUM_SENSORS];
 
 static TCA9548A dacMux;
 static Adafruit_MCP4728 dac;
@@ -31,11 +31,6 @@ void dacSetup()
         dac.begin();
         dacMux.closeChannel(i);
     }
-
-    for (int i = 0; i < NUM_SENSORS; i++)
-    {
-        interpol_pressure[i].begin(SMOOTHED_EXPONENTIAL, 50);
-    }
 }
 
 void setSliderDAC(int channel, int value_10bit)
@@ -58,8 +53,8 @@ void setSliderDAC(int channel, int value_10bit)
 
 void setPressDAC(int channel, int value_9bit)
 {
-    interpol_pressure[channel].add(value_9bit << 3);
-    value_9bit = interpol_pressure[channel].get();
+    smoothedPressure[channel] = (smoothedPressure[channel] + (value_9bit << 3)) / 2;
+    value_9bit = smoothedPressure[channel];
 
     if (channel < 4)
     {

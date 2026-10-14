@@ -1,4 +1,4 @@
-#include "Motus/sensors.h"
+#include "sensors.h"
 
 #include <Arduino.h>
 #include <Adafruit_MPR121.h>

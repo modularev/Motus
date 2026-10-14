@@ -1,12 +1,12 @@
-#include "Motus/presets.h"
+#include "presets.h"
 
 #include <Arduino.h>
 #include <EEPROM.h>
 #include <Encoder.h>
 
-#include "Motus/analogout.h"
-#include "Motus/config.h"
-#include "Motus/display.h"
+#include "analogout.h"
+#include "config.h"
+#include "display.h"
 
 enum Button
 {

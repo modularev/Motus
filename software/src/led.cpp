@@ -1,9 +1,9 @@
-#include "Motus/led.h"
+#include "led.h"
 
 #include <Arduino.h>
 #include <PCA9685.h>
 
-#include "Motus/config.h"
+#include "config.h"
 
 // weird pinrouting because of hardware
 static const int ledEnum[NUM_SLIDERS * LEDS_PER_SLIDER] = {

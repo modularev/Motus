@@ -1,9 +1,9 @@
-#include "Motus/display.h"
+#include "display.h"
 
 #include <Arduino.h>
 #include <LiquidCrystal.h>
 
-#include "Motus/config.h"
+#include "config.h"
 
 static const uint32_t REDRAW_INTERVAL_MS = 40;  // at most 25 redraws per second
 static const uint32_t RELEASE_TIMEOUT_MS = 100; // a control not reported for this long counts as released

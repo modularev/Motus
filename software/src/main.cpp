@@ -1,12 +1,12 @@
 #include <Arduino.h>
 #include <Wire.h>
 
-#include "Motus/analogout.h"
-#include "Motus/config.h"
-#include "Motus/display.h"
-#include "Motus/led.h"
-#include "Motus/presets.h"
-#include "Motus/sensors.h"
+#include "analogout.h"
+#include "config.h"
+#include "display.h"
+#include "led.h"
+#include "presets.h"
+#include "sensors.h"
 
 void setup()
 {
