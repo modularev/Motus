@@ -45,6 +45,27 @@ static PCA9685 ledDriver[NUM_LED_DRIVERS] = {
     PCA9685(LED_DRIVER_ADDR[2], PCA9685_MODE_LED_DIRECT, 800.0),
     PCA9685(LED_DRIVER_ADDR[3], PCA9685_MODE_LED_DIRECT, 800.0)};
 
+// Last value written to every LED: 0 off, 4096 full on, else 12 bit PWM.
+// Only changed values are written, so lit LEDs are never switched off and
+// on again between scans, which would flicker.
+static const uint16_t LED_FULL_ON = 4096;
+static const uint16_t LED_UNKNOWN = 0xFFFF;
+static uint16_t ledValue[NUM_LED_DRIVERS][LEDS_PER_DRIVER];
+
+static void writeLed(int driver, int pin, uint16_t value)
+{
+    if (ledValue[driver][pin] == value)
+        return;
+    ledValue[driver][pin] = value;
+
+    if (value == 0)
+        ledDriver[driver].getPin(pin).fullOffAndWrite();
+    else if (value >= LED_FULL_ON)
+        ledDriver[driver].getPin(pin).fullOnAndWrite();
+    else
+        ledDriver[driver].getPin(pin).setValueAndWrite(value);
+}
+
 void ledSetup()
 {
     // initialize LED drivers
@@ -55,7 +76,8 @@ void ledSetup()
 
         for (int j = 0; j < LEDS_PER_DRIVER; j++)
         {
-            ledDriver[i].getPin(j).fullOffAndWrite();
+            ledValue[i][j] = LED_UNKNOWN;
+            writeLed(i, j, 0);
         }
     }
 }
@@ -69,25 +91,14 @@ void setSliderLED(int slider_channel, int value)
     float frac = divValue - fullLed;
     int dimLed = frac * (float)4095; // scale fractional part to 12bit PWM value
     int ledStart = slider_channel * LEDS_PER_SLIDER;
-    int ledEnd = ledStart + fullLed;
 
-    // clear slider leds
-    for (int pos = ledStart; pos < (ledStart + LEDS_PER_SLIDER); pos++)
+    // full LEDs below the position, one dimmed LED at it, the rest off
+    for (int i = 0; i < LEDS_PER_SLIDER; i++)
     {
-        ledDriver[ledBus[pos]].getPin(ledEnum[pos]).fullOffAndWrite();
+        uint16_t level = i < fullLed ? LED_FULL_ON : (i == fullLed ? dimLed : 0);
+        int pos = ledStart + i;
+        writeLed(ledBus[pos], ledEnum[pos], level);
     }
-
-    // write full slider leds
-    // if (ledEnd <= ledStart + 5);
-    // else ledEnd--;
-    for (int pos = ledStart; pos < ledEnd; pos++)
-    {
-        ledDriver[ledBus[pos]].getPin(ledEnum[pos]).fullOnAndWrite();
-    }
-
-    // write dim slider leds
-    if (ledEnd <= ledStart + 5)
-        ledDriver[ledBus[ledEnd]].getPin(ledEnum[ledEnd]).setValueAndWrite(dimLed);
 }
 
 // x and y are pad-local, 10 bit
@@ -113,6 +124,6 @@ void setXYPadLED(int channel, int xAxis, int yAxis)
 
         // squared for a more even perceived fade
         int value = level * level * PAD_LED_MAX;
-        ledDriver[PAD_LED_DRIVER].getPin(i + padLedOffset).setValueAndWrite(value);
+        writeLed(PAD_LED_DRIVER, i + padLedOffset, value);
     }
 }
