@@ -82,27 +82,37 @@ void ledSetup()
     }
 }
 
-void setSliderLED(int slider_channel, int value)
+void setSliderLED(int slider_channel, int value, float brightness, int top, bool dot)
 {
     static const float div_const = 0.005847953216; // 10bit value divided into 6 parts (1024 / 170.66 )
 
     float divValue = (float)value * div_const;
-    int fullLed = (int)divValue;
-    float frac = divValue - fullLed;
+    int fullLed = value >= 1023 ? LEDS_PER_SLIDER : (int)divValue;
+    float frac = divValue - (int)divValue;
     int dimLed = frac * (float)4095; // scale fractional part to 12bit PWM value
     int ledStart = slider_channel * LEDS_PER_SLIDER;
 
-    // full LEDs below the position, one dimmed LED at it, the rest off
+    // dot: the two LEDs around the position share the light
+    float dotAt = constrain(value, 0, 1023) / 1023.0f * (LEDS_PER_SLIDER - 1);
+
+    // bar: full LEDs below the position, one dimmed LED at it, the rest off
     for (int i = 0; i < LEDS_PER_SLIDER; i++)
     {
-        uint16_t level = i < fullLed ? LED_FULL_ON : (i == fullLed ? dimLed : 0);
+        float level = i < fullLed ? 4095 : (i == fullLed ? dimLed : 0);
+        if (dot)
+            level = max(0.0f, 1.0f - fabsf(i - dotAt)) * 4095;
+        if (i == LEDS_PER_SLIDER - 1 && top >= 0)
+            level = top ? 4095 : 0;
+        else
+            level *= brightness;
+
         int pos = ledStart + i;
-        writeLed(ledBus[pos], ledEnum[pos], level);
+        writeLed(ledBus[pos], ledEnum[pos], level >= 4095 ? LED_FULL_ON : (uint16_t)level);
     }
 }
 
 // x and y are pad-local, 10 bit
-void setXYPadLED(int channel, int xAxis, int yAxis)
+void setXYPadLED(int channel, int xAxis, int yAxis, float brightness, bool all)
 {
     // account pca pin offset in second XY pad
     int padLedOffset = 0;
@@ -118,12 +128,12 @@ void setXYPadLED(int channel, int xAxis, int yAxis)
     {
         float dx = x - padLedX[i];
         float dy = y - padLedY[i];
-        float level = 1.0f - sqrtf(dx * dx + dy * dy) / PAD_LED_RADIUS;
+        float level = all ? 1.0f : 1.0f - sqrtf(dx * dx + dy * dy) / PAD_LED_RADIUS;
         if (level < 0)
             level = 0;
 
         // squared for a more even perceived fade
-        int value = level * level * PAD_LED_MAX;
+        int value = level * level * PAD_LED_MAX * brightness;
         writeLed(PAD_LED_DRIVER, i + padLedOffset, value);
     }
 }

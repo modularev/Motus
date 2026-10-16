@@ -1,14 +1,18 @@
 #ifndef PRESETS_H
 #define PRESETS_H
 
-#include <stdint.h>
+// Voltage presets: one per slider, each with the four var voltages
 
 void presetsSetup();
 
 // a slider was touched: the var outputs switch to its preset
 void presetsSelect(int slider);
+int presetsSelected();
 
-// call once per loop with the touched buttons (bit per Button)
-void presetsUpdate(uint8_t buttons);
+int presetValue(int preset, int var); // 0-4095
+void presetSetValue(int preset, int var, int value);
+
+void presetsLoad();
+void presetsSave();
 
 #endif

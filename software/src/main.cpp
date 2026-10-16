@@ -5,9 +5,15 @@
 #include "config.h"
 #include "display.h"
 #include "led.h"
+#include "menu.h"
+#include "modes.h"
 #include "presets.h"
 #include "recorder.h"
 #include "sensors.h"
+
+#ifdef MOTUS_DAC_TEST
+void dacTest();
+#endif
 
 void setup()
 {
@@ -16,40 +22,47 @@ void setup()
     ledSetup();
     sensorSetup();
     displaySetup();
-    presetsSetup();
     Wire.setClock(I2C_CLOCK_HZ);
+#ifdef MOTUS_DAC_TEST
+    dacTest();
+#endif
+    presetsSetup();
+    modesSetup();
 }
 
-static const uint32_t LOOP_LED_INTERVAL_MS = 20; // LED updates of looping controls, to keep the I2C bus free
+static const uint32_t LED_INTERVAL_MS = 20; // LEDs are redrawn 50 times a second
 
-// the slider on the master outputs: the last one touched
-static int masterSlider = -1;
+// last position of every control, drawn by updateLeds
+static int ledX[NUM_SENSORS];
+static int ledY[NUM_SENSORS];
+static bool padLit[NUM_SENSORS]; // pads stay dark until first touched
 
-static bool loopLedDue(int channel)
+// Master outputs: the average of all sliders that are touched or looping,
+// so they stay in range; with none active they keep their last value
+struct MasterInput
 {
-    static uint32_t lastLedMs[NUM_SENSORS];
-    if (millis() - lastLedMs[channel] < LOOP_LED_INTERVAL_MS)
-        return false;
-    lastLedMs[channel] = millis();
-    return true;
-}
+    bool active;
+    int code;     // position output, 12 bit
+    int pressure; // 0-511
+};
+static MasterInput masterInput[NUM_SLIDERS];
 
-static void outputSlider(int channel, int position, int pressure, bool gate, bool updateLed)
+
+static void outputSlider(int channel, int position, int pressure, bool gate)
 {
+    ledX[channel] = position;
+    int code = modesSliderOutput(channel, position, gate);
+    masterInput[channel] = {true, code, pressure};
     setGate(channel, gate);
-    setSliderDAC(channel, position);
     setPressDAC(channel, pressure);
-    if (updateLed)
-        setSliderLED(channel, position);
-    if (channel == masterSlider)
-        setMaster(position, pressure);
 }
 
 // x and y are pad-local; the outputs are as seen from the playing position
-static void outputPad(int channel, int x, int y, int pressure, bool updateLed)
+static void outputPad(int channel, int x, int y, int pressure)
 {
-    if (updateLed)
-        setXYPadLED(channel, x, y);
+    ledX[channel] = x;
+    ledY[channel] = y;
+    padLit[channel] = true;
 
     // INVERT BECAUSE OF CHANNEL LAYOUT (second pad is 180° turned)
     if (channel == NUM_SLIDERS + 1)
@@ -68,20 +81,32 @@ static bool updateChannel(int channel)
     TouchReading reading = sensorRead(channel);
     bool slider = isSlider(channel);
 
+    // with the menu open a touch only selects, so a loop keeps playing
+    Playback playback;
+    Source source = recorderChannel(channel, reading, !menuActive(), playback);
+
+    if (source == SOURCE_NONE)
+    {
+        // the touch stopped a loop: outputs stay quiet until it lifts
+        setGate(channel, false);
+        setPressDAC(channel, 0);
+        if (slider)
+            masterInput[channel].active = false;
+        return false;
+    }
+
     if (reading.started && slider)
     {
         presetsSelect(channel);
-        masterSlider = channel;
+        menuSelect(channel);
     }
 
-    Playback playback;
-    if (recorderChannel(channel, reading, playback))
+    if (source == SOURCE_LOOP)
     {
-        bool led = loopLedDue(channel);
         if (slider)
-            outputSlider(channel, playback.position, playback.pressure, playback.gate, led);
+            outputSlider(channel, playback.position, playback.pressure, playback.gate);
         else
-            outputPad(channel, playback.position, playback.y, playback.pressure, led);
+            outputPad(channel, playback.position, playback.y, playback.pressure);
         return slider && playback.gate;
     }
 
@@ -90,6 +115,8 @@ static bool updateChannel(int channel)
     {
         setGate(channel, false);
         setPressDAC(channel, 0);
+        if (slider)
+            masterInput[channel].active = false;
         return false;
     }
 
@@ -97,17 +124,77 @@ static bool updateChannel(int channel)
     bool recording = recorderIsRecording(channel);
     if (slider)
     {
-        outputSlider(channel, reading.position, pressure, reading.touched, true);
-        displaySlider(channel, reading.position, pressure, recording);
+        outputSlider(channel, reading.position, pressure, reading.touched);
+        masterInput[channel].active = reading.touched;
+        displaySlider(channel, reading.position, pressure, recording, modesSliderText(channel));
     }
     else
     {
-        outputPad(channel, reading.x, reading.y, pressure, true);
+        outputPad(channel, reading.x, reading.y, pressure);
         bool flipped = channel == NUM_SLIDERS + 1;
         displayPad(channel, flipped ? 1023 - reading.x : reading.x, flipped ? 1023 - reading.y : reading.y, recording);
     }
     // usbMIDI.sendControlChange(channel, reading.position / 8, 1);
     return slider && reading.touched;
+}
+
+// LEDs: the bar or glow of every control, with the recording blinking, a
+// flash at every loop start, the slider being edited breathing while the menu
+// is open, and the top LEDs blinking while recording is armed
+static void updateLeds()
+{
+    static elapsedMillis sinceDraw;
+    if (sinceDraw < LED_INTERVAL_MS)
+        return;
+    sinceDraw = 0;
+
+    uint32_t now = millis();
+    bool blinkFast = (now / 125) % 2 == 0;
+    bool blinkSlow = (now / 500) % 2 == 0;
+    float breath = 0.2f + 0.8f * (0.5f - 0.5f * cosf(2 * PI * now / 2000.0f));
+
+    for (int channel = 0; channel < NUM_SENSORS; channel++)
+    {
+        float brightness = 1.0f;
+        bool flash = false;
+        if (recorderIsRecording(channel))
+            brightness = blinkFast ? 1.0f : 0.0f;
+        else if (recorderLoopStart(channel))
+            flash = true;
+        else if (menuActive() && channel == menuSelected())
+            brightness = breath;
+
+        if (isSlider(channel))
+        {
+            int top = recorderArmed() ? (blinkSlow ? 1 : 0) : -1;
+            bool note = sliderSettings[channel].mode == MODE_NOTE;
+            if (flash)
+                setSliderLED(channel, 1023, brightness, top);
+            else if (note)
+                setSliderLED(channel, modesNotePosition(channel), brightness, top, true);
+            else
+                setSliderLED(channel, ledX[channel], brightness, top);
+        }
+        else
+            setXYPadLED(channel, ledX[channel], ledY[channel], padLit[channel] ? brightness : 0.0f, flash);
+    }
+}
+
+static void updateMaster()
+{
+    int count = 0;
+    long code = 0;
+    long pressure = 0;
+    for (int i = 0; i < NUM_SLIDERS; i++)
+    {
+        if (!masterInput[i].active)
+            continue;
+        count++;
+        code += masterInput[i].code;
+        pressure += masterInput[i].pressure;
+    }
+    if (count > 0)
+        setMaster(code / count, pressure / count);
 }
 
 void loop()
@@ -121,9 +208,12 @@ void loop()
             anySliderGate = true;
     }
     setMasterGate(anySliderGate);
+    modesUpdate();
+    updateMaster();
+    updateLeds();
 
     uint8_t buttons = buttonsRead();
-    presetsUpdate(buttons);
+    menuUpdate(buttons);
     recorderUpdate(buttons);
     displayUpdate();
 }
