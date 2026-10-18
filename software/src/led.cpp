@@ -4,6 +4,7 @@
 #include <PCA9685.h>
 
 #include "config.h"
+#include "system.h"
 
 // weird pinrouting because of hardware
 static const int ledEnum[NUM_SLIDERS * LEDS_PER_SLIDER] = {
@@ -54,6 +55,10 @@ static uint16_t ledValue[NUM_LED_DRIVERS][LEDS_PER_DRIVER];
 
 static void writeLed(int driver, int pin, uint16_t value)
 {
+    // the BRIGHT system setting scales everything except fully off
+    if (value > 0 && systemSettings.bright < 100)
+        value = max(1, (int)(min(value, (uint16_t)4095) * systemSettings.bright / 100));
+
     if (ledValue[driver][pin] == value)
         return;
     ledValue[driver][pin] = value;

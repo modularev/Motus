@@ -13,6 +13,8 @@ void setAllDACs(int value_12bit); // every channel of every DAC, for measuring t
 
 // calibrated voltages (0 - about 8.2 V), for 1 V/octave
 int setSliderVolts(int channel, float volts); // returns the DAC value written
+int sliderVoltsToCode(int channel, float volts);
+void setSliderDAC12(int channel, int value_12bit);
 void setVarVolts(int var, float volts);
 
 #endif

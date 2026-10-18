@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <EEPROM.h>
 #include <Wire.h>
 
 #include "analogout.h"
@@ -10,6 +11,7 @@
 #include "presets.h"
 #include "recorder.h"
 #include "sensors.h"
+#include "storage.h"
 
 #ifdef MOTUS_DAC_TEST
 void dacTest();
@@ -26,8 +28,22 @@ void setup()
 #ifdef MOTUS_DAC_TEST
     dacTest();
 #endif
+#ifdef MOTUS_DEBUG
+    // E,<address>,<32 bytes in hex>: the EEPROM before anything is loaded or converted
+    while (!Serial && millis() < 5000)
+        ;
+    for (int address = 0; address < EEPROM.length(); address += 32)
+    {
+        Serial.printf("E,%d", address);
+        for (int b = 0; b < 32 && address + b < EEPROM.length(); b++)
+            Serial.printf(",%02X", EEPROM.read(address + b));
+        Serial.println();
+    }
+#endif
+    storageSetup();
     presetsSetup();
     modesSetup();
+    displayMessage("MOTUS");
 }
 
 static const uint32_t LED_INTERVAL_MS = 20; // LEDs are redrawn 50 times a second
@@ -47,13 +63,20 @@ struct MasterInput
 };
 static MasterInput masterInput[NUM_SLIDERS];
 
+// gate output, unless it is a trigger, which the modes write on time themselves
+static void writeGate(int channel, bool gate)
+{
+    if (isSlider(channel) && modesOwnsGate(channel))
+        return;
+    setGate(channel, gate);
+}
 
 static void outputSlider(int channel, int position, int pressure, bool gate)
 {
     ledX[channel] = position;
-    int code = modesSliderOutput(channel, position, gate);
+    int code = modesSliderOutput(channel, position, pressure, gate);
     masterInput[channel] = {true, code, pressure};
-    setGate(channel, gate);
+    writeGate(channel, gate);
     setPressDAC(channel, pressure);
 }
 
@@ -81,6 +104,22 @@ static bool updateChannel(int channel)
     TouchReading reading = sensorRead(channel);
     bool slider = isSlider(channel);
 
+    // A touch while a SET pad is held only selects the slider for the menu:
+    // until the finger lifts it is hidden from everything else, so no value,
+    // gate or preset changes, nothing is recorded and a loop keeps playing.
+    static bool selectOnly[NUM_SLIDERS];
+    if (slider && reading.started && menuPadHeld())
+    {
+        selectOnly[channel] = true;
+        menuSelect(channel);
+    }
+    if (slider && selectOnly[channel])
+    {
+        if (!reading.touched)
+            selectOnly[channel] = false;
+        reading = TouchReading{};
+    }
+
     // with the menu open a touch only selects, so a loop keeps playing
     Playback playback;
     Source source = recorderChannel(channel, reading, !menuActive(), playback);
@@ -88,11 +127,12 @@ static bool updateChannel(int channel)
     if (source == SOURCE_NONE)
     {
         // the touch stopped a loop: outputs stay quiet until it lifts
-        setGate(channel, false);
+        bool gate = slider && modesGate(channel, false);
+        writeGate(channel, gate);
         setPressDAC(channel, 0);
         if (slider)
             masterInput[channel].active = false;
-        return false;
+        return gate;
     }
 
     if (reading.started && slider)
@@ -113,11 +153,12 @@ static bool updateChannel(int channel)
     // on release the outputs are set once more, to the value from before lifting
     if (!reading.touched && !reading.released)
     {
-        setGate(channel, false);
+        bool gate = slider && modesGate(channel, false);
+        writeGate(channel, gate);
         setPressDAC(channel, 0);
         if (slider)
             masterInput[channel].active = false;
-        return false;
+        return gate;
     }
 
     int pressure = reading.touched ? reading.pressure : 0;
@@ -167,9 +208,11 @@ static void updateLeds()
         if (isSlider(channel))
         {
             int top = recorderArmed() ? (blinkSlow ? 1 : 0) : -1;
-            bool note = sliderSettings[channel].mode == MODE_NOTE;
+            bool note = modesShowsDot(channel);
             if (flash)
                 setSliderLED(channel, 1023, brightness, top);
+            else if (modesRunning(channel))
+                setSliderLED(channel, modesLfoLevel(channel), brightness, top);
             else if (note)
                 setSliderLED(channel, modesNotePosition(channel), brightness, top, true);
             else
@@ -187,10 +230,12 @@ static void updateMaster()
     long pressure = 0;
     for (int i = 0; i < NUM_SLIDERS; i++)
     {
-        if (!masterInput[i].active)
+        // running LFOs join the mix too
+        bool running = modesRunning(i);
+        if (!masterInput[i].active && !running)
             continue;
         count++;
-        code += masterInput[i].code;
+        code += running ? modesOutputCode(i) : masterInput[i].code;
         pressure += masterInput[i].pressure;
     }
     if (count > 0)
@@ -206,9 +251,11 @@ void loop()
         bool gate = updateChannel(channel);
         if (isSlider(channel) && gate)
             anySliderGate = true;
+
+        // LFOs and glides are written between the sensor reads, not once per scan
+        modesUpdate();
     }
     setMasterGate(anySliderGate);
-    modesUpdate();
     updateMaster();
     updateLeds();
 

@@ -4,6 +4,7 @@
 
 #include "config.h"
 #include "display.h"
+#include "system.h"
 
 static const uint32_t SAMPLE_MS = 10;       // one sample every 10 ms, interpolated on playback
 static const int MAX_SAMPLES = 2000;        // 20 s per control
@@ -42,7 +43,9 @@ static bool armed = false;
 static int recording = -1; // the channel being recorded
 
 static bool holdDown = false;
-static bool holdUsed = false; // the HOLD press stopped something, so it is not a tap
+static bool holdUsed = false;  // the HOLD press did something else, so it is not a tap
+static bool holdArmed = false; // HOLD was pressed while armed or recording
+static bool momentary = false; // the recording runs while HOLD is held
 static uint32_t holdDownMs = 0;
 
 static bool ignoring[NUM_SENSORS]; // a touch that stopped a loop, until it lifts
@@ -74,6 +77,20 @@ static void stopAllLoops()
     }
 }
 
+static void startRecording(int channel)
+{
+    armed = false;
+    recording = channel;
+    state[channel] = RECORDING;
+    length[channel] = 0;
+    startMs[channel] = millis();
+    last[channel] = {0, 0, 0};
+}
+
+// HOLD: a tap arms, and when armed or recording exits (disarms, or closes the
+// loop). Held while not armed, a touched control records for as long as HOLD
+// is held. Held while armed or recording, a touched loop stops, and holding
+// on shows the stop-all bar.
 void recorderUpdate(uint8_t buttons)
 {
     bool down = buttons & (1 << BUTTON_HOLD);
@@ -82,10 +99,11 @@ void recorderUpdate(uint8_t buttons)
     {
         holdDownMs = millis();
         holdUsed = false;
+        holdArmed = armed || recording >= 0;
     }
     uint32_t held = millis() - holdDownMs;
 
-    if (down && !holdUsed && held >= LONG_PRESS_DELAY_MS)
+    if (down && holdArmed && !holdUsed && held >= LONG_PRESS_DELAY_MS)
     {
         float progress = (float)(held - LONG_PRESS_DELAY_MS) / LONG_PRESS_PROGRESS_MS;
         if (progress < 1.0f)
@@ -104,18 +122,28 @@ void recorderUpdate(uint8_t buttons)
             displayMessage("LOOPS", "STOPPED");
         }
     }
-    if (!down && holdDown && !holdUsed && held < LONG_PRESS_DELAY_MS)
+
+    if (!down && holdDown)
     {
-        // tap: close the recording, or arm / disarm. A press let go during
-        // the stop-all bar does nothing.
-        if (recording >= 0)
+        if (momentary)
+        {
+            // the held recording ends with HOLD
             finishRecording();
-        else
-            armed = !armed;
+            momentary = false;
+        }
+        else if (!holdUsed && held < LONG_PRESS_DELAY_MS)
+        {
+            // tap: close the recording, or arm / disarm. A press let go
+            // later does nothing.
+            if (recording >= 0)
+                finishRecording();
+            else
+                armed = !armed;
+        }
     }
     holdDown = down;
 
-    displayRecordArmed(armed || recording >= 0);
+    displayRecordState(armed, recording >= 0);
 }
 
 // add the samples that are due since the recording started, so the timing
@@ -161,22 +189,23 @@ Source recorderChannel(int channel, const TouchReading &reading, bool liveOverLo
 {
     if (reading.started)
     {
-        if (holdDown && state[channel] == LOOPING)
+        if (holdDown && holdArmed)
         {
-            // HOLD held + touch: stop this loop; the touch itself is ignored
-            state[channel] = LIVE;
+            // armed, HOLD held + touch: stop this loop; the touch itself is ignored
+            if (state[channel] == LOOPING)
+                state[channel] = LIVE;
             holdUsed = true;
             ignoring[channel] = true;
         }
-        else if (armed && recording < 0)
+        else if (holdDown && recording < 0)
         {
-            armed = false;
-            recording = channel;
-            state[channel] = RECORDING;
-            length[channel] = 0;
-            startMs[channel] = millis();
-            last[channel] = {0, 0, 0};
+            // not armed, HOLD held + touch: record while HOLD is held
+            startRecording(channel);
+            momentary = true;
+            holdUsed = true;
         }
+        else if (armed && recording < 0)
+            startRecording(channel);
     }
 
     if (ignoring[channel])
@@ -214,7 +243,7 @@ Source recorderChannel(int channel, const TouchReading &reading, bool liveOverLo
 
     // a gate held across the loop start drops briefly to retrigger
     bool heldAcross = (samples[channel][0].pressure & GATE_BIT) && (samples[channel][n - 1].pressure & GATE_BIT);
-    if (heldAcross && t < RETRIGGER_MS)
+    if (heldAcross && systemSettings.loopTrig && t < RETRIGGER_MS)
         playback.gate = false;
     return SOURCE_LOOP;
 }

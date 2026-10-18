@@ -16,5 +16,6 @@ void menuUpdate(uint8_t buttons);
 
 bool menuActive();
 int menuSelected(); // the slider being edited
+bool menuPadHeld(); // a SET pad is held: a slider touch only selects
 
 #endif

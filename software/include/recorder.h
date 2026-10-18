@@ -6,10 +6,10 @@
 #include "sensors.h"
 
 // Touch recorder. Tap HOLD to arm; the first touch on a slider or pad starts
-// recording it, including lifts and pauses, until HOLD is tapped again. The
-// recording then loops on that control. Keep a finger on HOLD and touch a
-// looping control to stop its loop; a long press on HOLD stops all loops,
-// with a progress bar on the screen.
+// recording it, including lifts and pauses, until HOLD is tapped again (a
+// tap while armed disarms). Or hold HOLD and touch a control: it records for
+// as long as HOLD is held. With recording armed, hold HOLD and touch a loop to
+// stop it, or keep holding for the stop-all progress bar.
 
 struct Playback
 {

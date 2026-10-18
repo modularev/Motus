@@ -5,8 +5,25 @@
 #include <MCP23017.h>
 #include <Wire.h>
 
+#include "system.h"
+
 static Adafruit_MPR121 cap = Adafruit_MPR121();
 static MCP23017 mcp = MCP23017(MCP23017_ADDR);
+
+// ADDR lines of the MPR121s on the MCP23018: high puts a chip on the idle
+// address, low on the selected one. A single write of both ports selects the
+// next chip and releases the previous one. Lines above the select lines stay low.
+static const uint16_t SELECT_NONE = (1 << NUM_SENSOR_SELECT_LINES) - 1;
+static uint16_t selectState = 0;
+
+static void selectSensor(int channel) // -1: none
+{
+    uint16_t state = channel < 0 ? SELECT_NONE : SELECT_NONE & ~(1 << channel);
+    if (state == selectState)
+        return;
+    mcp.write(state);
+    selectState = state;
+}
 
 // MPR121 registers
 static const uint8_t MPR121_REG_FILTERED = 0x04;
@@ -15,6 +32,7 @@ static const uint8_t MPR121_ECR_STOP = 0x00;
 static const uint8_t MPR121_ECR_RUN = 0x4C; // 12 electrodes, baseline tracking off
 
 // Touch detection, on the summed electrode strength above the noise floor
+// (scaled by the TOUCH system setting)
 static const int TOUCH_ON = 120;
 static const int TOUCH_OFF = 60;
 
@@ -34,10 +52,10 @@ static const float EDGE_MARGIN = 0.45f;    // electrodes cut off at each end so 
 // Position smoothing: an adaptive low-pass (1€ filter) that smooths heavily
 // when the finger is slow and hardly at all when it moves fast, followed by
 // a little play so a resting finger's slow wobble does not move the output.
-static const float MIN_CUTOFF_HZ = 3.0f;   // smoothing of a resting finger
+static const float SMOOTH_CUTOFF_HZ = 12.0f; // smoothing of a resting finger: this divided by the SMOOTH system setting
 static const float SPEED_COEFF = 0.05f;    // extra cutoff (Hz) per count/s of finger speed
 static const float SPEED_CUTOFF_HZ = 1.0f; // smoothing of the speed estimate
-static const float PLAY = 6.0f;            // counts the finger can wobble without moving the output
+// the play, the counts a finger can wobble without moving the output, is the DEADBAND system setting
 
 // Lifting a finger shifts the position as the contact shrinks. On release the
 // position is set back to its value from before the contact started shrinking.
@@ -113,10 +131,7 @@ void sensorSetup()
     mcp.portMode(MCP23017Port::B, 0);
 
     // set ADDR pins on MPR121 HIGH
-    for (int i = 0; i < NUM_SENSOR_SELECT_LINES; i++)
-    {
-        mcp.digitalWrite(i, HIGH);
-    }
+    selectSensor(-1);
 
     // Default address is 0x5A, if tied to 3.3V its 0x5B
     if (!cap.begin(MPR121_ADDR_IDLE))
@@ -127,14 +142,13 @@ void sensorSetup()
     }
     for (int i = 0; i < NUM_SENSOR_SELECT_LINES; i++)
     {
-        mcp.digitalWrite(i, LOW);
+        selectSensor(i);
         cap.begin(MPR121_ADDR_SELECTED);
         cap.writeRegister(MPR121_REG_ECR, MPR121_ECR_STOP);
         cap.writeRegister(MPR121_REG_ECR, MPR121_ECR_RUN);
 #ifdef MOTUS_DEBUG
         ecrReadback[i] = cap.readRegister8(MPR121_REG_ECR);
 #endif
-        mcp.digitalWrite(i, HIGH);
     }
 
     // take the untouched level of every electrode as its baseline
@@ -144,7 +158,7 @@ void sensorSetup()
         long sum[ELECTRODES_PER_SENSOR] = {0};
         int samples = 0;
 
-        mcp.digitalWrite(channel, LOW);
+        selectSensor(channel);
         for (int n = 0; n < BASELINE_SAMPLES; n++)
         {
             uint16_t filtered[ELECTRODES_PER_SENSOR];
@@ -156,7 +170,6 @@ void sensorSetup()
             }
             delay(5);
         }
-        mcp.digitalWrite(channel, HIGH);
 
         for (int i = 0; i < ELECTRODES_PER_SENSOR; i++)
             baseline[channel][i] = samples ? (float)sum[i] / samples : 0;
@@ -361,6 +374,7 @@ static float getSliderPressure(float contact, float position, float &shift)
     float t = constrain((position - a.position) / (b.position - a.position), 0.0f, 1.0f);
     float light = a.light + t * (b.light - a.light);
     float firm = a.firm + t * (b.firm - a.firm);
+    firm = light + (firm - light) * systemSettings.pressure / 100.0f;
 
     float pressure = constrain((contact - light) / (firm - light), 0.0f, PRESSURE_COMP_MAX);
     shift = pressure * (a.shift + t * (b.shift - a.shift));
@@ -398,11 +412,11 @@ static float updateAxis(AxisFilter &f, float raw, float dt)
 {
     float speed = (raw - f.x) / dt;
     f.dx += smoothingFactor(dt, SPEED_CUTOFF_HZ) * (speed - f.dx);
-    float cutoff = MIN_CUTOFF_HZ + SPEED_COEFF * fabsf(f.dx);
+    float cutoff = SMOOTH_CUTOFF_HZ / max((int)systemSettings.smooth, 1) + SPEED_COEFF * fabsf(f.dx);
     f.x += smoothingFactor(dt, cutoff) * (raw - f.x);
 
     // the play shrinks to nothing at the ends, so 0 and 1023 can be reached
-    float play = min(PLAY, min(f.x, 1023.0f - f.x));
+    float play = min((float)systemSettings.deadband, min(f.x, 1023.0f - f.x));
     float error = f.x - f.out;
     if (error > play)
         f.out = f.x - play;
@@ -497,11 +511,10 @@ TouchReading sensorRead(int channel)
 {
     TouchReading reading = {false, false, false, 0, 0, 0, 0, 0};
 
-    // select corresponding sensor, read it, deselect
+    // select the sensor and read it
     uint16_t filtered[ELECTRODES_PER_SENSOR];
-    mcp.digitalWrite(channel, LOW);
+    selectSensor(channel);
     bool ok = readFiltered(filtered);
-    mcp.digitalWrite(channel, HIGH);
 
     int16_t touchStrength[ELECTRODES_PER_SENSOR];
     int strength = 0;
@@ -516,7 +529,8 @@ TouchReading sensorRead(int channel)
     }
 
     // hysteresis so a touch does not flicker around the threshold
-    reading.touched = strength >= (wasTouched[channel] ? TOUCH_OFF : TOUCH_ON);
+    int threshold = (wasTouched[channel] ? TOUCH_OFF : TOUCH_ON) * 100 / max((int)systemSettings.touch, 1);
+    reading.touched = strength >= threshold;
     reading.started = reading.touched && !wasTouched[channel];
 
     if (ok && !reading.touched)
@@ -570,7 +584,8 @@ TouchReading sensorRead(int channel)
                     fingerStrength[PAD_Y_ELECTRODE[i]] = touchStrength[PAD_Y_ELECTRODE[i]];
             }
 
-            float share = (getContact(fingerStrength) - PAD_PRESSURE_LIGHT) / (PAD_PRESSURE_FIRM - PAD_PRESSURE_LIGHT);
+            float span = (PAD_PRESSURE_FIRM - PAD_PRESSURE_LIGHT) * systemSettings.pressure / 100.0f;
+            float share = (getContact(fingerStrength) - PAD_PRESSURE_LIGHT) / span;
             reading.pressure = constrain(share, 0.0f, 1.0f) * 511;
         }
 
@@ -641,9 +656,8 @@ uint8_t buttonsRead()
     static uint16_t touched = 0;
 
     uint16_t filtered[ELECTRODES_PER_SENSOR];
-    mcp.digitalWrite(BUTTON_SENSOR, LOW);
+    selectSensor(BUTTON_SENSOR);
     bool ok = readFiltered(filtered);
-    mcp.digitalWrite(BUTTON_SENSOR, HIGH);
     if (!ok)
         return toButtons(touched);
 

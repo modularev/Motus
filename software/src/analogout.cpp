@@ -34,6 +34,19 @@ static const float VAR_CAL_VOLTS[NUM_VARS][CAL_POINTS] = {
 static TCA9548A dacMux;
 static Adafruit_MCP4728 dac;
 
+// All DACs share one address, so only one multiplexer channel may be open.
+// The open channel is remembered and only switched when another DAC is
+// written, which saves two I2C messages on most writes.
+static int openDac = -1;
+
+static void selectDac(int mux)
+{
+    if (mux == openDac)
+        return;
+    dacMux.writeRegister(1 << mux);
+    openDac = mux;
+}
+
 void dacSetup()
 {
     for (int i = 0; i < NUM_SLIDERS; i++)
@@ -46,21 +59,20 @@ void dacSetup()
 
     dacMux.begin();
     dacMux.closeAll();
+    openDac = -1;
 
     for (int i = 0; i < NUM_DAC_MUX_CHANNELS; i++)
     {
-        dacMux.openChannel(i);
+        selectDac(i);
         dac.begin();
-        dacMux.closeChannel(i);
     }
 }
 
 // position output of a slider, full 12 bit
-static void setSliderDAC12(int channel, int value_12bit)
+void setSliderDAC12(int channel, int value_12bit)
 {
-    dacMux.openChannel(channel < 4 ? 0 : 1);
+    selectDac(channel < 4 ? 0 : 1);
     dac.setChannelValue(static_cast<MCP4728_channel_t>(channel % 4), value_12bit, MCP4728_VREF_INTERNAL);
-    dacMux.closeChannel(channel < 4 ? 0 : 1);
 }
 
 void setSliderDAC(int channel, int value_10bit)
@@ -76,28 +88,25 @@ void setPressDAC(int channel, int value_9bit)
 
     if (channel < 4)
     {
-        dacMux.openChannel(2);
+        selectDac(2);
         dac.setChannelValue(static_cast<MCP4728_channel_t>(channel), value_9bit, MCP4728_VREF_INTERNAL);
-        dacMux.closeChannel(2);
     }
     else if (channel < 8)
     {
-        dacMux.openChannel(3);
+        selectDac(3);
         dac.setChannelValue(static_cast<MCP4728_channel_t>(channel % 4), value_9bit, MCP4728_VREF_INTERNAL);
-        dacMux.closeChannel(3);
     }
     else if (channel == 8 || channel == 9)
     {
-        dacMux.openChannel(5);
+        selectDac(5);
         dac.setChannelValue(static_cast<MCP4728_channel_t>(channel - 6), value_9bit, MCP4728_VREF_INTERNAL);
-        dacMux.closeChannel(5);
     }
 }
 
 void setXYPadDAC(int channel, int x_value_10bit, int y_value_10bit)
 {
     // DAC outputs are wired A = X1, B = X2, C = Y1, D = Y2
-    dacMux.openChannel(4);
+    selectDac(4);
     {
 
         if (channel == 8)
@@ -112,17 +121,15 @@ void setXYPadDAC(int channel, int x_value_10bit, int y_value_10bit)
             dac.setChannelValue(MCP4728_CHANNEL_D, y_value_10bit << 2, MCP4728_VREF_INTERNAL);
         }
     }
-    dacMux.closeChannel(4);
 }
 
 void setMaster(int pos_12bit, int force_9bit)
 {
-    dacMux.openChannel(5);
+    selectDac(5);
     {
         dac.setChannelValue(MCP4728_CHANNEL_A, constrain(pos_12bit, 0, 4095), MCP4728_VREF_INTERNAL);
         dac.setChannelValue(MCP4728_CHANNEL_B, force_9bit << 3, MCP4728_VREF_INTERNAL);
     }
-    dacMux.closeChannel(5);
 }
 
 void setGate(int channel, bool touchState)
@@ -139,19 +146,17 @@ void setMasterGate(bool touchState)
 
 void setVarDAC(int var, int value_12bit)
 {
-    dacMux.openChannel(VAR_DAC_MUX_CHANNEL);
+    selectDac(VAR_DAC_MUX_CHANNEL);
     dac.setChannelValue(static_cast<MCP4728_channel_t>(var), constrain(value_12bit, 0, 4095), MCP4728_VREF_INTERNAL);
-    dacMux.closeChannel(VAR_DAC_MUX_CHANNEL);
 }
 
 void setAllDACs(int value_12bit)
 {
     for (int mux = 0; mux < NUM_DAC_MUX_CHANNELS; mux++)
     {
-        dacMux.openChannel(mux);
+        selectDac(mux);
         for (int channel = 0; channel < 4; channel++)
             dac.setChannelValue(static_cast<MCP4728_channel_t>(channel), constrain(value_12bit, 0, 4095), MCP4728_VREF_INTERNAL);
-        dacMux.closeChannel(mux);
     }
 }
 
@@ -163,6 +168,11 @@ static int voltsToCode(const float cal[CAL_POINTS], float volts)
     float t = (volts - cal[i]) / (cal[i + 1] - cal[i]);
     float code = CAL_CODES[i] + t * (CAL_CODES[i + 1] - CAL_CODES[i]);
     return constrain(lroundf(code), 0, 4095);
+}
+
+int sliderVoltsToCode(int channel, float volts)
+{
+    return voltsToCode(SLIDER_CAL_VOLTS[channel], volts);
 }
 
 int setSliderVolts(int channel, float volts)
