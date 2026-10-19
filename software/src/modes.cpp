@@ -5,6 +5,7 @@
 
 #include "analogout.h"
 #include "config.h"
+#include "sequencer.h"
 #include "system.h"
 
 static const int STORAGE_ADDRESS = 128;           // the single save of earlier firmware
@@ -33,6 +34,17 @@ static const RateRange LFO_RATES[NUM_LFO_RATES] = {
     {"mid", 0.2f, 5.0f},
     {"fast", 1.0f, 25.0f},
 };
+// tempo sync: the slider picks one of these cycle lengths, in beats
+struct SyncDivision
+{
+    const char *name;
+    float beats;
+};
+static const SyncDivision SYNC_DIVISIONS[] = {
+    {"4 bar", 16}, {"2 bar", 8}, {"1 bar", 4}, {"1/2", 2}, {"1/4", 1}, {"1/8", 0.5f}, {"1/16", 0.25f}, {"1/32", 0.125f},
+};
+static const int NUM_SYNC_DIVISIONS = sizeof(SYNC_DIVISIONS) / sizeof(SYNC_DIVISIONS[0]);
+
 static const char *LFO_SHAPE_NAMES[NUM_LFO_SHAPES] = {"sine", "tri", "ramp", "saw", "square", "s&h"};
 static const uint32_t DEPTH_HOLD_MS = 30;       // pressure is sampled this often, so a lift does not set the depth
 static const uint32_t OUTPUT_INTERVAL_US = 500; // LFOs and glides are written at most this often, between the sensor reads
@@ -205,9 +217,12 @@ static Lfo lfo[NUM_SLIDERS];
 // the main loop but by a timer interrupt, which switches them on and off on
 // time. Gate pins are plain GPIO, so this is safe next to the I2C traffic.
 static IntervalTimer trigTimer;
-static volatile bool trigActive[NUM_SLIDERS];
-static volatile uint32_t trigEndUs[NUM_SLIDERS];
-static uint32_t lastTrigMs[NUM_SLIDERS];
+// one more than the sliders: m.gate for the sequencer
+static const int MASTER_TRIG = NUM_SLIDERS;
+static volatile bool trigActive[NUM_SLIDERS + 1];
+static volatile uint32_t trigEndUs[NUM_SLIDERS + 1];
+static uint32_t lastTrigMs[NUM_SLIDERS + 1];
+static volatile uint32_t gateRises[NUM_SLIDERS];
 
 static bool usesTrig(const SliderSettings &s)
 {
@@ -223,6 +238,18 @@ static void fireTrig(int slider)
     lastTrigMs[slider] = millis();
     trigEndUs[slider] = micros() + systemSettings.trigMs * 1000; // TRIG LEN system setting
     trigActive[slider] = true;
+    if (slider < NUM_SLIDERS)
+        gateRises[slider]++;
+}
+
+void modesFireMasterTrig()
+{
+    fireTrig(MASTER_TRIG);
+}
+
+uint32_t modesGateRises(int slider)
+{
+    return gateRises[slider];
 }
 
 static void trigTick()
@@ -251,6 +278,21 @@ static void trigTick()
         }
         owned[slider] = true;
     }
+
+    // m.gate: the sequencer's triggers while it runs
+    static bool masterOwned = false;
+    if (sequencerRunning())
+    {
+        if (trigActive[MASTER_TRIG] && (int32_t)(now - trigEndUs[MASTER_TRIG]) >= 0)
+            trigActive[MASTER_TRIG] = false;
+        setMasterGate(trigActive[MASTER_TRIG]);
+        masterOwned = true;
+    }
+    else if (masterOwned)
+    {
+        trigActive[MASTER_TRIG] = false;
+        masterOwned = false;
+    }
 }
 
 bool modesOwnsGate(int slider)
@@ -259,10 +301,27 @@ bool modesOwnsGate(int slider)
 }
 
 // LFO rate from the slider position and the rate range, so a new range applies at once
+// tempo sync: the cycle length the slider position picks
+static int syncDivision(int slider)
+{
+    return constrain(lfo[slider].position * NUM_SYNC_DIVISIONS / 1024, 0, NUM_SYNC_DIVISIONS - 1);
+}
+
 static float lfoRate(int slider)
 {
-    const RateRange &r = LFO_RATES[sliderSettings[slider].lfoRate];
+    if (sliderSettings[slider].lfoRate == LFO_RATE_SYNC)
+        return 1.0f / (SYNC_DIVISIONS[syncDivision(slider)].beats * sequencerBeatSeconds());
+    const RateRange &r = LFO_RATES[min((int)sliderSettings[slider].lfoRate, 2)];
     return r.low * powf(r.high / r.low, constrain(lfo[slider].position, 0, 1023) / 1023.0f);
+}
+
+void modesSyncRestart()
+{
+    for (int slider = 0; slider < NUM_SLIDERS; slider++)
+    {
+        if (sliderSettings[slider].mode == MODE_LFO && sliderSettings[slider].lfoRate == LFO_RATE_SYNC)
+            lfo[slider].phase = 0;
+    }
 }
 
 void modesDefaults()
@@ -352,6 +411,21 @@ static int nearestNote(const ScaleInfo &scale, int root, float volts)
     return best;
 }
 
+// every scale note between base and base + range, lowest first
+static int notesInRange(const SliderSettings &s, int notes[])
+{
+    const ScaleInfo &scale = SCALES[s.scale - 1];
+    int low = min(s.base, s.base + s.range);
+    int high = max(s.base, s.base + s.range);
+    int count = 0;
+    for (int note = (low + SEMITONE_CENTS - 1) / SEMITONE_CENTS; note <= high / SEMITONE_CENTS && note <= MAX_SEMITONE; note++)
+    {
+        if (inScale(scale, s.root, note))
+            notes[count++] = note;
+    }
+    return count;
+}
+
 // the scale note at a slider position: the slider spans every scale note
 // between base and base + range, with a little hysteresis at the borders
 static int quantize(int slider, int position)
@@ -359,15 +433,8 @@ static int quantize(int slider, int position)
     const SliderSettings &s = sliderSettings[slider];
     const ScaleInfo &scale = SCALES[s.scale - 1];
 
-    int low = min(s.base, s.base + s.range);
-    int high = max(s.base, s.base + s.range);
     int notes[MAX_NOTES];
-    int count = 0;
-    for (int note = (low + SEMITONE_CENTS - 1) / SEMITONE_CENTS; note <= high / SEMITONE_CENTS && note <= MAX_SEMITONE; note++)
-    {
-        if (inScale(scale, s.root, note))
-            notes[count++] = note;
-    }
+    int count = notesInRange(s, notes);
     noteCount[slider] = count;
     if (count == 0)
     {
@@ -384,6 +451,61 @@ static int quantize(int slider, int position)
         step = constrain((int)x, 0, count - 1);
     currentStep[slider] = step;
     return notes[step];
+}
+
+int modesValueAt(int slider, int position)
+{
+    const SliderSettings &s = sliderSettings[slider];
+    position = constrain(position, 0, 1023);
+    if (!s.scale)
+        return constrain(s.base + lroundf(position / 1023.0f * s.range), 0, MAX_CENTS);
+
+    int notes[MAX_NOTES];
+    int count = notesInRange(s, notes);
+    if (count == 0)
+        return nearestNote(SCALES[s.scale - 1], s.root, (float)s.base / CENTS_PER_VOLT) * SEMITONE_CENTS;
+    int p = s.range < 0 ? 1023 - position : position;
+    return notes[constrain(p * count / 1024, 0, count - 1)] * SEMITONE_CENTS;
+}
+
+int modesPositionOf(int slider, int cents)
+{
+    const SliderSettings &s = sliderSettings[slider];
+    if (!s.scale)
+    {
+        if (s.range == 0)
+            return 0;
+        return constrain(lroundf((float)(cents - s.base) / s.range * 1023.0f), 0, 1023);
+    }
+
+    // the nearest note's place among the notes in the range
+    int notes[MAX_NOTES];
+    int count = notesInRange(s, notes);
+    if (count == 0)
+        return 0;
+    int best = 0;
+    for (int i = 1; i < count; i++)
+    {
+        if (abs(notes[i] * SEMITONE_CENTS - cents) < abs(notes[best] * SEMITONE_CENTS - cents))
+            best = i;
+    }
+    int position = lroundf((best + 0.5f) / count * 1023.0f);
+    return s.range < 0 ? 1023 - position : position;
+}
+
+const char *modesValueText(int slider, int cents)
+{
+    static char text[9];
+    if (sliderSettings[slider].scale)
+    {
+        int semitone = constrain((int)lroundf((float)cents / SEMITONE_CENTS), 0, MAX_SEMITONE);
+        char note[5];
+        snprintf(note, sizeof(note), "%s%u", NOTE_NAMES[semitone % 12], (unsigned)(semitone / 12) % 10);
+        snprintf(text, sizeof(text), "%-4s%4.2f", note, (float)cents / CENTS_PER_VOLT);
+    }
+    else
+        snprintf(text, sizeof(text), "%7.2fV", (float)cents / CENTS_PER_VOLT);
+    return text;
 }
 
 // move the glide on and write the output; returns the DAC value
@@ -459,12 +581,17 @@ static void lfoInput(int slider, int position, int pressure, bool gate)
     if (gate)
         l.position = position;
 
-    if (gate && !lastGate[slider] && s.lfoReset)
+    bool landed = gate && !lastGate[slider];
+    if (landed && s.lfoGate == 0)
+        gateRises[slider]++; // touch gate
+    if (landed && s.lfoReset)
     {
         l.phase = 0;
         l.value = random(1001) / 1000.0f;
         if (s.lfoGate == LFO_GATE_TRIG)
             fireTrig(slider);
+        if (s.lfoGate == LFO_GATE_CYCLE)
+            gateRises[slider]++;
     }
 
     // the pressure depth is always tracked, so switching DEPTH applies at
@@ -529,7 +656,12 @@ int modesSliderOutput(int slider, int position, int pressure, bool &gate)
     bool newNote = semitone >= 0 && semitone != currentSemitone[slider];
     currentSemitone[slider] = semitone;
     if (newNote && gate && lastGate[slider] && s.slideGate == SLIDE_GATE_RETRIG)
+    {
         gateLowUntil[slider] = millis() + RETRIGGER_MS;
+        gateRises[slider]++;
+    }
+    if (landed && !usesTrig(s))
+        gateRises[slider]++;
     if (usesTrig(s) && gate && (landed || newNote))
         fireTrig(slider);
     lastGate[slider] = gate;
@@ -568,6 +700,8 @@ void modesUpdate()
                 l.value = random(1001) / 1000.0f;
                 if (s.lfoGate == LFO_GATE_TRIG)
                     fireTrig(slider);
+                if (s.lfoGate == LFO_GATE_CYCLE)
+                    gateRises[slider]++;
             }
         }
 
@@ -657,7 +791,9 @@ const char *modesSliderText(int slider)
 {
     static char text[7];
     const SliderSettings &s = sliderSettings[slider];
-    if (s.mode == MODE_LFO)
+    if (s.mode == MODE_LFO && s.lfoRate == LFO_RATE_SYNC)
+        snprintf(text, sizeof(text), "%s", SYNC_DIVISIONS[syncDivision(slider)].name);
+    else if (s.mode == MODE_LFO)
     {
         float rate = lfoRate(slider);
         snprintf(text, sizeof(text), rate < 10 ? "%.2fHz" : "%.1fHz", rate);
@@ -689,7 +825,7 @@ const char *lfoShapeName(int shape)
 
 const char *lfoRateName(int rate)
 {
-    return LFO_RATES[rate].name;
+    return rate == LFO_RATE_SYNC ? "sync" : LFO_RATES[rate].name;
 }
 
 

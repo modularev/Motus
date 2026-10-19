@@ -8,6 +8,9 @@ void displaySetup();
 void displaySlider(int channel, int position, int pressure, bool recording = false, const char *text = "");
 void displayPad(int channel, int x, int y, bool recording = false);
 
+// a touched slider with two lines of its own, e.g. the value WRITE stores
+void displaySliderText(int channel, const char *top, const char *bottom);
+
 // custom characters for text: a recording dot and the FINE indicator
 constexpr char GLYPH_DOT = 6;
 constexpr char GLYPH_FINE = 7;

@@ -10,6 +10,7 @@
 #include "modes.h"
 #include "presets.h"
 #include "recorder.h"
+#include "sequencer.h"
 #include "sensors.h"
 #include "storage.h"
 
@@ -137,8 +138,21 @@ static bool updateChannel(int channel)
 
     if (reading.started && slider)
     {
-        presetsSelect(channel);
+        sequencerTouch(channel);
         menuSelect(channel);
+    }
+
+    // WRITE: a touched slider's value goes into the current row of its stage,
+    // until the encoder edits it while the slider is held
+    if (slider && sequencerWriteRow() >= 0)
+    {
+        if (reading.started || reading.touched)
+            menuWriteTouch(channel, true);
+        bool edited = menuWriteEdited(channel);
+        if ((reading.touched || reading.released) && !edited)
+            presetSetValue(channel, sequencerWriteRow(), modesValueAt(channel, reading.position));
+        if (!reading.touched)
+            menuWriteTouch(channel, false);
     }
 
     if (source == SOURCE_LOOP)
@@ -167,7 +181,15 @@ static bool updateChannel(int channel)
     {
         outputSlider(channel, reading.position, pressure, reading.touched);
         masterInput[channel].active = reading.touched;
-        displaySlider(channel, reading.position, pressure, recording, modesSliderText(channel));
+        if (sequencerWriteRow() >= 0)
+        {
+            // WRITE: the row and the value written, e.g. "S3 V1" over "C#2 2.08"
+            char top[9];
+            snprintf(top, sizeof(top), "S%u V%u", (unsigned)(channel + 1) % 10, (unsigned)(sequencerWriteRow() + 1) % 10);
+            displaySliderText(channel, top, modesValueText(channel, presetValue(channel, sequencerWriteRow())));
+        }
+        else
+            displaySlider(channel, reading.position, pressure, recording, modesSliderText(channel));
     }
     else
     {
@@ -207,10 +229,18 @@ static void updateLeds()
 
         if (isSlider(channel))
         {
-            int top = recorderArmed() ? (blinkSlow ? 1 : 0) : -1;
+            // armed recording blinks the top LEDs; a running sequencer lights its stage's
+            int top = recorderArmed() ? (blinkSlow ? 1 : 0) : (sequencerRunning() && channel == sequencerStage() ? 1 : -1);
             bool note = modesShowsDot(channel);
+            int row = sequencerWriteRow();
             if (flash)
                 setSliderLED(channel, 1023, brightness, top);
+            else if (row >= 0)
+            {
+                // WRITE: the row's value of this stage, where it lies on the slider
+                int value = presetValue(channel, row);
+                setSliderLED(channel, modesPositionOf(channel, value), brightness, top, note);
+            }
             else if (modesRunning(channel))
                 setSliderLED(channel, modesLfoLevel(channel), brightness, top);
             else if (note)
@@ -252,10 +282,13 @@ void loop()
         if (isSlider(channel) && gate)
             anySliderGate = true;
 
-        // LFOs and glides are written between the sensor reads, not once per scan
+        // LFOs, glides and the sequencer clock run between the sensor reads, not once per scan
         modesUpdate();
+        sequencerUpdate();
     }
-    setMasterGate(anySliderGate);
+    // m.gate: the sequencer's triggers while it runs, else the meta gate
+    if (!sequencerRunning())
+        setMasterGate(anySliderGate);
     updateMaster();
     updateLeds();
 

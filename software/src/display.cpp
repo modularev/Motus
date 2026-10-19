@@ -104,6 +104,14 @@ void displaySlider(int channel, int position, int pressure, bool recording, cons
         formatBar(wanted[1], position, 1023);
 }
 
+void displaySliderText(int channel, const char *top, const char *bottom)
+{
+    if (!claimScreen(channel))
+        return;
+    snprintf(wanted[0], sizeof(wanted[0]), "%-8s", top);
+    snprintf(wanted[1], sizeof(wanted[1]), "%-8s", bottom);
+}
+
 void displayPad(int channel, int x, int y, bool recording)
 {
     if (!claimScreen(channel))

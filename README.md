@@ -10,24 +10,33 @@ Motus is a capacitive touch controller for modular synthesizers. It turns finger
 |---|---|---|
 | Sliders 1–8 | `position`, `force`, `gate` | The slider's output (a voltage, a note or an LFO, see slider modes), pressure of the finger, gate while touched. The output and LEDs hold their value after release. |
 | XY pads 1–2 | `X1` `Y1` `Z1`, `X2` `Y2` `Z2` | Finger position on the pad and its pressure (Z). The pad LEDs glow around the finger. |
-| Master | `m.pos`, `m.force`, `m.gate` | Average position output and pressure of all sliders that are touched, looping or running an LFO, so it stays in range; holds its value when none are. Gate while any slider gate is on. |
-| Presets | `var 1`–`var 4` | Four voltages from one of eight presets, see below. |
+| Master | `m.pos`, `m.force`, `m.gate` | Average position output and pressure of all sliders that are touched, looping or running an LFO, so it stays in range; holds its value when none are. Gate while any slider gate is on, or the sequencer's step trigger while it runs. |
+| Sequencer | `var 1`–`var 4` | The four rows of the step sequencer, see below. |
 
 The display shows the touched slider or pad with its value (a voltage, note or LFO rate), the menu while it is open, or the selected preset when idle.
 
 ### Menu
 
-`SET 1`–`SET 4` open the four menu pages. Tapping the same pad again steps to the next setting, or hold it and turn the encoder to scroll through the settings; otherwise the encoder changes the value. Touching a slider selects which slider is edited: normally it keeps playing as usual, while a SET pad is held the touch only selects and leaves the slider's outputs unchanged. The menu closes after 5 seconds without input.
+| `SET 1`–`SET 4` | Result |
+|---|---|
+| Tap | open the step view of sequencer row V1–V4 (see Sequencer); tap again to close it |
+| Double tap | open the settings page below |
+| With settings open: encoder | scroll through the settings |
+| With settings open: tap the same pad | close the settings |
+| With settings open: hold `FINE` and turn | change the value, both ways |
+| With settings open: tap another pad | switch to that pad's settings page |
 
-A slot holds a patch: every slider's settings and the var presets. The SYS settings are global and saved with every save. The idle screen shows the current slot, with `*` while there are unsaved changes (`Slot 2*`), and the unit starts with the slot saved or loaded last. Recordings are not saved.
+Touching a slider selects which slider is edited: normally it keeps playing as usual, while a SET pad is held the touch only selects and leaves the slider's outputs unchanged. Views close after 5 seconds without input.
 
-| Pad | Page | Settings |
+A slot holds a patch: every slider's settings, the sequencer's stage values and settings. The SYS settings are global and saved with every save. The idle screen shows the current slot, with `*` while there are unsaved changes (`Slot 2*`), and the unit starts with the slot saved or loaded last. Recordings are not saved.
+
+| Double tap | Page | Settings |
 |---|---|---|
 | `SET 1` | MODE | the slider's mode: SLIDE or LFO |
-| `SET 2` | VAR | var 1–4 of the slider's preset, shown as note and volts: semitone steps (faster when turning fast), 0.01 V with `FINE` |
+| `SET 2` | SEQ | the sequencer settings |
 | `SET 3` | EDIT | the settings of the slider's mode |
 | `SET 4` | SYS | global settings, see below |
-| `FINE` | | toggle small encoder steps for exact values (± on the display) |
+| `FINE` | | tap: toggle small encoder steps for exact values (± on the display); hold and turn: change a setting's value |
 | `SAVE` | | tap: `SAVE 2?`, turn the encoder to pick one of 4 slots, tap again to store (the second line says `replace`, `empty` or `current`) |
 | `LOAD` | | tap: `LOAD 2?`, pick the slot, tap again to load it; a SET or `FINE` pad, or 5 s without input, cancels either prompt |
 
@@ -43,9 +52,23 @@ A slot holds a patch: every slider's settings and the var presets. The SYS setti
 | TRIG LEN | 1–20 ms: trigger length |
 | LOOP TRG | on or off: a gate held across a loop start drops briefly to retrigger |
 
-### Voltage presets
+### Sequencer
 
-Each slider has its own preset of four voltages. Touching a slider switches `var 1`–`var 4` to that slider's preset.
+A step sequencer in the spirit of the Serge TKB: the 8 sliders are 8 stages, and every stage has four voltages, the rows on `var 1`–`var 4`. While it runs, `m.gate` sends a trigger on every step and the top LED of the current stage (of row V1, or of the row being written) is lit.
+
+**Step views:** tap `SET 1`–`SET 4` to open the step view of row V1–V4. The sliders' LEDs show the row's values, each where it lies on its slider, and touching a slider stores what it would output (with its BASE, RANGE and QUANT) into the row at that stage; touches do not move the running sequence. To fine-tune a step, hold its slider and turn the encoder (semitones, 0.01 V with `FINE`); from then on the finger no longer writes during that touch. The display shows the row, stage and value (`V1 S3` over `C#2 2.08`).
+
+**Settings** (double tap `SET 2`):
+
+| Setting | Values |
+|---|---|
+| RUN | stop or run; it starts on the first stage |
+| CLOCK | int (the internal tempo), or S1–S8: a step on every rising gate of that slider, so an LFO slider with a cycle gate is a playable clock, a slider with triggers a tap clock, and a recorded loop a rhythm |
+| BPM | 20–300 |
+| DIV | what one step is: 1/1, 1/2, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32. With a slider clock, one pulse counts as one step, and the tempo for synced LFOs is measured from it |
+| DIR | forward, backward, pendulum, random |
+| V1–V4 STEPS | 1–8: every row has its own length, so rows of different lengths run against each other; all step together on the clock, in the same direction |
+| TOUCH | jump: a touch jumps to the slider's stage; ignore: play the sliders freely |
 
 ### Slider modes
 
@@ -64,7 +87,7 @@ Every slider has two modes that share the same settings for their output range a
 | SLEW | SLIDE | glide between values, off to 10 s, continuing after release; coarse steps 5 ms … 10 s, about 1 % steps with `FINE` |
 | GATE | SLIDE | gate while touched, retrigger (a short drop on every new note) or trigger (on touch and every new note) |
 | SHAPE | LFO | sine and triangle start halfway and rise, ramp rises from BASE, saw falls to it, square starts high, S&H holds a new random level every cycle |
-| RATE | LFO | slow 0.02–1 Hz, mid 0.2–5 Hz, fast 1–25 Hz, spread exponentially along the slider |
+| RATE | LFO | slow 0.02–1 Hz, mid 0.2–5 Hz, fast 1–25 Hz, spread exponentially along the slider; or sync: the slider picks a cycle of 4 bars, 2 bars, 1 bar, 1/2, 1/4, 1/8, 1/16 or 1/32 at the sequencer tempo, restarting in phase when the sequencer starts |
 | DEPTH | LFO | fixed, or set by pressure (held on release); less depth stays closer to BASE |
 | RESET | LFO | free running, or restart on touch |
 | GATE | LFO | while touched, high for the first half of every cycle (a clock), a trigger at every cycle start, or a trigger on every new quantized note |
@@ -109,7 +132,7 @@ docs/               panel image
 hardware/           schematic, board, BOM, panel artwork and Gerber files
 software/           firmware (PlatformIO project)
   include/          module headers; config.h holds all pins, addresses and channel counts
-  src/              main.cpp, sensors, menu, modes, presets, recorder, analogout (DACs and gates), led, display
+  src/              main.cpp, sensors, menu, modes, sequencer, presets, recorder, storage, system, analogout (DACs and gates), led, display
 ```
 
 ## Firmware

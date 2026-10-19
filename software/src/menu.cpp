@@ -7,6 +7,7 @@
 #include "display.h"
 #include "modes.h"
 #include "presets.h"
+#include "sequencer.h"
 #include "storage.h"
 #include "system.h"
 
@@ -23,7 +24,7 @@ enum Page
 {
     PAGE_NONE,
     PAGE_MODE,
-    PAGE_VAR,
+    PAGE_SEQ,
     PAGE_EDIT,
     PAGE_SYS
 };
@@ -61,6 +62,25 @@ static const int VOLT_FINE_STEP = CENTS_PER_VOLT / 10;
 static const int SLEW_STEPS[] = {0, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000};
 static const int NUM_SLEW_STEPS = sizeof(SLEW_STEPS) / sizeof(SLEW_STEPS[0]);
 
+// settings on the SEQ page
+enum SeqItem
+{
+    SEQ_RUN,
+    SEQ_CLOCK,
+    SEQ_BPM,
+    SEQ_DIV,
+    SEQ_DIR,
+    SEQ_STEPS_1, // the length of every row
+    SEQ_STEPS_4 = SEQ_STEPS_1 + NUM_VARS - 1,
+    SEQ_TOUCH,
+    NUM_SEQ_ITEMS
+};
+static const char *SEQ_NAMES[NUM_SEQ_ITEMS] = {"RUN", "CLOCK", "BPM", "DIV", "DIR", "V1 STEPS", "V2 STEPS", "V3 STEPS", "V4 STEPS", "TOUCH"};
+
+// WRITE: a slider held while the encoder turns gets its stage value edited
+static int writeHeld = -1;
+static bool writeEdited = false;
+
 // settings on the SYS page
 enum SystemItem
 {
@@ -91,7 +111,10 @@ static Encoder enc(ENC_PIN_A, ENC_PIN_B);
 static int32_t encConsumed = 0;
 static elapsedMillis sinceDetent;
 
-static Page page = PAGE_NONE;
+static const uint32_t DOUBLE_TAP_MS = 300; // a second tap this soon opens the settings
+
+static Page page = PAGE_NONE; // the settings page open
+static int stepView = -1;     // or the step view of a row (0-3) open
 static int item = 0;
 static int slider = 0;
 static bool fine = false;
@@ -102,8 +125,8 @@ static int itemCount(Page p)
 {
     switch (p)
     {
-    case PAGE_VAR:
-        return NUM_VARS;
+    case PAGE_SEQ:
+        return NUM_SEQ_ITEMS;
     case PAGE_EDIT:
         return sliderSettings[slider].mode == MODE_LFO ? NUM_LFO_SETTINGS : NUM_SLIDE_SETTINGS;
     case PAGE_SYS:
@@ -242,10 +265,36 @@ static void change(int detents)
         item = 0;
         break;
 
-    case PAGE_VAR:
+    case PAGE_SEQ:
     {
-        int step = fine ? VAR_FINE_STEP : VAR_COARSE_STEP * fastFactor();
-        presetSetValue(slider, item, presetValue(slider, item) + detents * step);
+        SeqSettings &q = seqSettings;
+        switch (item)
+        {
+        case SEQ_RUN:
+            sequencerSetRunning(detents > 0);
+            break;
+        case SEQ_CLOCK:
+            stepSetting(q.clock, detents, 0, NUM_SLIDERS);
+            break;
+        case SEQ_BPM:
+            q.bpm = constrain((int)q.bpm + detents * fastFactor(), 20, 300);
+            break;
+        case SEQ_DIV:
+            stepSetting(q.div, detents, 0, NUM_SEQ_DIVISIONS - 1);
+            break;
+        case SEQ_DIR:
+            stepSetting(q.dir, detents, 0, NUM_SEQ_DIRECTIONS - 1);
+            break;
+        case SEQ_STEPS_1:
+        case SEQ_STEPS_1 + 1:
+        case SEQ_STEPS_1 + 2:
+        case SEQ_STEPS_4:
+            stepSetting(q.steps[item - SEQ_STEPS_1], detents, 1, NUM_SLIDERS);
+            break;
+        case SEQ_TOUCH:
+            stepSetting(q.touch, detents, 0, 1);
+            break;
+        }
         break;
     }
 
@@ -403,10 +452,44 @@ static void show()
         snprintf(bottom, sizeof(bottom), "%8s", modeName(s.mode));
         break;
 
-    case PAGE_VAR:
+    case PAGE_SEQ:
     {
-        snprintf(top, sizeof(top), "S%u%cV%u", number, fine ? GLYPH_FINE : ' ', (unsigned)(item + 1) % 10);
-        formatNoteVolts(bottom, sizeof(bottom), presetValue(slider, item));
+        const SeqSettings &q = seqSettings;
+        snprintf(top, sizeof(top), "%s", SEQ_NAMES[item]);
+        switch (item)
+        {
+        case SEQ_RUN:
+            snprintf(bottom, sizeof(bottom), "%8s", sequencerRunning() ? "run" : "stop");
+            break;
+        case SEQ_CLOCK:
+            if (q.clock)
+            {
+                char name[4];
+                snprintf(name, sizeof(name), "S%u", (unsigned)q.clock % 10);
+                snprintf(bottom, sizeof(bottom), "%8s", name);
+            }
+            else
+                snprintf(bottom, sizeof(bottom), "%8s", "int");
+            break;
+        case SEQ_BPM:
+            snprintf(bottom, sizeof(bottom), "%8u", (unsigned)q.bpm % 1000);
+            break;
+        case SEQ_DIV:
+            snprintf(bottom, sizeof(bottom), "%8s", seqDivisionName(q.div));
+            break;
+        case SEQ_DIR:
+            snprintf(bottom, sizeof(bottom), "%8s", seqDirectionName(q.dir));
+            break;
+        case SEQ_STEPS_1:
+        case SEQ_STEPS_1 + 1:
+        case SEQ_STEPS_1 + 2:
+        case SEQ_STEPS_4:
+            snprintf(bottom, sizeof(bottom), "%8u", (unsigned)q.steps[item - SEQ_STEPS_1] % 10);
+            break;
+        case SEQ_TOUCH:
+            snprintf(bottom, sizeof(bottom), "%8s", q.touch ? "ignore" : "jump");
+            break;
+        }
         break;
     }
 
@@ -434,8 +517,14 @@ void menuSelect(int touched)
     if (touched != slider)
         item = min(item, itemCount(page) - 1);
     slider = touched;
-    if (page != PAGE_NONE)
+    if (menuActive())
         lastInput = millis();
+}
+
+static void closeViews()
+{
+    page = PAGE_NONE;
+    stepView = -1;
 }
 
 void menuUpdate(uint8_t buttons)
@@ -443,43 +532,68 @@ void menuUpdate(uint8_t buttons)
     uint8_t pressed = buttons & ~lastButtons;
     uint8_t released = ~buttons & lastButtons;
     lastButtons = buttons;
+    uint32_t now = millis();
+    int detents = readDetents();
 
-    // A page pad opens its page as soon as it is touched. Tapping it again
-    // steps to the next setting when it is let go; holding it and turning
-    // the encoder scrolls through the settings instead.
-    static const Page PAGES[4] = {PAGE_MODE, PAGE_VAR, PAGE_EDIT, PAGE_SYS};
-    static bool opened = false;   // this press opened the page, so letting go does not step
-    static bool scrolled = false; // the encoder scrolled during this press
-    bool padHeld = false;
+    // SET pads, acting on lift. With no settings page open, a tap opens the
+    // step view of its row, or closes it, and a double tap opens the pad's
+    // settings page. With a settings page open, the encoder scrolls through
+    // the settings, holding FINE and turning changes the value, a tap on its
+    // pad closes it and a tap on another pad switches to that page.
+    static const Page PAGES[4] = {PAGE_MODE, PAGE_SEQ, PAGE_EDIT, PAGE_SYS};
+    static uint32_t lastTapMs[4];
+    static bool turned[4]; // the encoder turned while the pad was held, so letting go is no tap
+    int heldPad = -1;
     for (int i = 0; i < 4; i++)
     {
         uint8_t bit = 1 << (BUTTON_SET_1 + i);
         if (pressed & bit)
+            turned[i] = false;
+        if (buttons & bit)
+            heldPad = i;
+        if (!(released & bit) || turned[i])
+            continue;
+
+        if (page == PAGES[i])
+            closeViews();
+        else if (page != PAGE_NONE)
         {
-            opened = page != PAGES[i];
-            scrolled = false;
-            if (opened)
-            {
-                page = PAGES[i];
-                item = 0;
-            }
-            lastInput = millis();
+            page = PAGES[i]; // switch settings pages with a single tap
+            item = 0;
         }
-        if ((released & bit) && page == PAGES[i] && !opened && !scrolled)
+        else if (now - lastTapMs[i] < DOUBLE_TAP_MS)
         {
-            item = (item + 1) % itemCount(page);
-            lastInput = millis();
+            closeViews();
+            page = PAGES[i];
+            item = 0;
+            lastTapMs[i] = 0;
+            lastInput = now;
+            continue;
         }
-        if ((buttons & bit) && page == PAGES[i])
-            padHeld = true;
+        else if (stepView == i)
+            closeViews();
+        else
+        {
+            closeViews();
+            stepView = i;
+        }
+        lastTapMs[i] = now;
+        lastInput = now;
     }
 
-    if (pressed & (1 << BUTTON_FINE))
+    // FINE: a tap (on lift) toggles fine steps; held while the encoder turns,
+    // it edits the value instead and the toggle stays
+    static bool fineTurned = false;
+    uint8_t fineBit = 1 << BUTTON_FINE;
+    bool fineHeld = buttons & fineBit;
+    if (pressed & fineBit)
+        fineTurned = false;
+    if ((released & fineBit) && !fineTurned)
         fine = !fine;
 
     // SAVE / LOAD prompt
     uint8_t cancelPads = (1 << BUTTON_SET_1) | (1 << BUTTON_SET_2) | (1 << BUTTON_SET_3) | (1 << BUTTON_SET_4) | (1 << BUTTON_FINE);
-    if (prompt != PROMPT_NONE && ((pressed & cancelPads) || millis() - promptInput > MENU_TIMEOUT_MS))
+    if (prompt != PROMPT_NONE && ((pressed & cancelPads) || now - promptInput > MENU_TIMEOUT_MS))
         prompt = PROMPT_NONE;
     for (int i = 0; i < 2; i++)
     {
@@ -506,31 +620,51 @@ void menuUpdate(uint8_t buttons)
                 displayMessage("EMPTY", line);
             prompt = PROMPT_NONE;
         }
-        promptInput = millis();
+        promptInput = now;
     }
 
-    int detents = readDetents();
-    if (prompt != PROMPT_NONE && detents != 0)
+    if (detents != 0)
     {
-        promptSlot = ((promptSlot + detents) % NUM_SLOTS + NUM_SLOTS) % NUM_SLOTS;
-        promptInput = millis();
-    }
-    else if (page != PAGE_NONE && detents != 0)
-    {
-        if (padHeld)
+        if (heldPad >= 0)
+            turned[heldPad] = true;
+
+        if (stepView >= 0 && writeHeld >= 0)
         {
-            // scroll through the settings, wrapping around
-            int count = itemCount(page);
-            item = ((item + detents) % count + count) % count;
-            scrolled = true;
+            // a held slider in a step view: its step value, semitones or 0.01 V with FINE
+            int step = fine ? VAR_FINE_STEP : VAR_COARSE_STEP * fastFactor();
+            presetSetValue(writeHeld, stepView, presetValue(writeHeld, stepView) + detents * step);
+            writeEdited = true;
+            sinceDetent = 0;
+            lastInput = now;
         }
-        else
-            change(detents);
-        lastInput = millis();
+        else if (prompt != PROMPT_NONE)
+        {
+            promptSlot = ((promptSlot + detents) % NUM_SLOTS + NUM_SLOTS) % NUM_SLOTS;
+            promptInput = now;
+        }
+        else if (page != PAGE_NONE)
+        {
+            if (fineHeld)
+            {
+                change(detents); // FINE held: the value
+                fineTurned = true;
+            }
+            else
+            {
+                // the encoder alone scrolls through the settings, wrapping around
+                int count = itemCount(page);
+                item = ((item + detents) % count + count) % count;
+            }
+            lastInput = now;
+        }
     }
 
-    if (page != PAGE_NONE && millis() - lastInput > MENU_TIMEOUT_MS)
-        page = PAGE_NONE;
+    if (menuActive() && now - lastInput > MENU_TIMEOUT_MS)
+        closeViews();
+
+    // the step view is where touches write into its row
+    if (sequencerWriteRow() != stepView)
+        sequencerSetWriteRow(stepView);
 
     if (prompt != PROMPT_NONE)
     {
@@ -544,6 +678,13 @@ void menuUpdate(uint8_t buttons)
         snprintf(bottom, sizeof(bottom), "%8s", state);
         displayMenu(top, bottom);
     }
+    else if (stepView >= 0)
+    {
+        // V1 S3 over the step's value, e.g. "C#2 2.08"
+        char top[9];
+        snprintf(top, sizeof(top), "V%u S%u %c", (unsigned)(stepView + 1) % 10, (unsigned)(slider + 1) % 10, fine ? GLYPH_FINE : ' ');
+        displayMenu(top, modesValueText(slider, presetValue(slider, stepView)));
+    }
     else
         show();
     displayStatus(presetsSelected(), fine, storageCurrentSlot(), storageUnsaved());
@@ -551,12 +692,30 @@ void menuUpdate(uint8_t buttons)
 
 bool menuActive()
 {
-    return page != PAGE_NONE;
+    return page != PAGE_NONE || stepView >= 0;
 }
 
 int menuSelected()
 {
     return slider;
+}
+
+void menuWriteTouch(int touched, bool touching)
+{
+    if (touching)
+        lastInput = millis(); // writing keeps the step view open
+    if (touching && touched != writeHeld)
+    {
+        writeHeld = touched;
+        writeEdited = false;
+    }
+    else if (!touching && touched == writeHeld)
+        writeHeld = -1;
+}
+
+bool menuWriteEdited(int slider)
+{
+    return slider == writeHeld && writeEdited;
 }
 
 bool menuPadHeld()

@@ -19,16 +19,16 @@ struct Storage
 
 static uint16_t presets[NUM_PRESETS][NUM_VARS]; // cents
 static uint16_t outputs[NUM_VARS];
-static int selected = 0;
+static int selected[NUM_VARS]; // the stage each row plays
 
-// set the var outputs to the selected preset
+// set every var output to its row's selected stage
 static void writeOutputs(bool force)
 {
     for (int var = 0; var < NUM_VARS; var++)
     {
-        if (force || outputs[var] != presets[selected][var])
+        if (force || outputs[var] != presets[selected[var]][var])
         {
-            outputs[var] = presets[selected][var];
+            outputs[var] = presets[selected[var]][var];
             setVarVolts(var, (float)outputs[var] / CENTS_PER_VOLT);
         }
     }
@@ -71,15 +71,22 @@ void presetsSetup()
 
 void presetsSelect(int slider)
 {
-    if (slider == selected)
+    for (int var = 0; var < NUM_VARS; var++)
+        selected[var] = slider;
+    writeOutputs(false);
+}
+
+void presetsSelectRow(int var, int slider)
+{
+    if (selected[var] == slider)
         return;
-    selected = slider;
+    selected[var] = slider;
     writeOutputs(false);
 }
 
 int presetsSelected()
 {
-    return selected;
+    return selected[0];
 }
 
 int presetValue(int preset, int var)

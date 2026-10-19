@@ -9,9 +9,10 @@
 
 void presetsSetup();
 
-// a slider was touched: the var outputs switch to its preset
+// the var outputs switch to a slider's preset: all of them, or one row
 void presetsSelect(int slider);
-int presetsSelected();
+void presetsSelectRow(int var, int slider);
+int presetsSelected(); // row 1's
 
 // values in cents of a volt (1/1200 V), like BASE and RANGE
 int presetValue(int preset, int var);

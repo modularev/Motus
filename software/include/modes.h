@@ -39,7 +39,8 @@ enum LfoShape : uint8_t
     NUM_LFO_SHAPES
 };
 
-constexpr int NUM_LFO_RATES = 3;
+constexpr int NUM_LFO_RATES = 4; // slow, mid, fast, sync
+constexpr int LFO_RATE_SYNC = 3;
 
 // Base and range are in cents of a volt (1/1200 V): a semitone is 100, an
 // octave 1200 at 1 V/octave, and 0.01 V is 12.
@@ -90,6 +91,26 @@ bool modesGate(int slider, bool touchGate);
 
 // trigger gates are written by a timer, not by the main loop
 bool modesOwnsGate(int slider);
+
+// counts every time the slider's gate output turns on, for clocking
+uint32_t modesGateRises(int slider);
+
+// a trigger on m.gate, timed like the slider triggers
+void modesFireMasterTrig();
+
+// the SLIDE value (cents) a slider gives at a position, with its BASE,
+// RANGE and QUANT, whatever its mode: what the sequencer's WRITE stores
+int modesValueAt(int slider, int position);
+
+// the other way round: where on the slider a value (cents) lies, 10 bit
+int modesPositionOf(int slider, int cents);
+
+// a value (cents) in 8 characters as the slider shows it: the note and the
+// volts when quantized ("C#2 2.08"), else the volts ("   2.08V")
+const char *modesValueText(int slider, int cents);
+
+// tempo-synced LFOs start their cycle again, in phase with the sequencer
+void modesSyncRestart();
 
 // LFO: the output runs on its own; its current DAC value, and where it is
 // within its swing for the LEDs (10 bit)
