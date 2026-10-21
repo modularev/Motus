@@ -6,6 +6,7 @@
 #include "analogout.h"
 #include "config.h"
 #include "modes.h"
+#include "sequencer.h"
 
 // the single save of earlier firmware
 static const int STORAGE_ADDRESS = 0;
@@ -21,17 +22,33 @@ static uint16_t presets[NUM_PRESETS][NUM_VARS]; // cents
 static uint16_t outputs[NUM_VARS];
 static int selected[NUM_VARS]; // the stage each row plays
 
+// what a row outputs: its value, snapped to the sequencer's scale if the
+// quantizer applies to the row (the stored value stays as it is)
+static int outputCents(int var)
+{
+    int cents = presets[selected[var]][var];
+    if (seqSettings.scale && (seqSettings.quantRows & (1 << var)))
+        cents = modesQuantizeCents(seqSettings.scale - 1, seqSettings.root, cents);
+    return cents;
+}
+
 // set every var output to its row's selected stage
 static void writeOutputs(bool force)
 {
     for (int var = 0; var < NUM_VARS; var++)
     {
-        if (force || outputs[var] != presets[selected[var]][var])
+        int cents = outputCents(var);
+        if (force || outputs[var] != cents)
         {
-            outputs[var] = presets[selected[var]][var];
-            setVarVolts(var, (float)outputs[var] / CENTS_PER_VOLT);
+            outputs[var] = cents;
+            setVarVolts(var, (float)cents / CENTS_PER_VOLT);
         }
     }
+}
+
+void presetsRefresh()
+{
+    writeOutputs(false);
 }
 
 void presetsLoadLegacy()

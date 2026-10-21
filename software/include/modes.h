@@ -61,7 +61,7 @@ struct SliderSettings
     uint8_t lfoDepth;  // LFO: 0 fixed, 1 pressure sets the depth
     uint8_t lfoReset;  // LFO: 0 free running, 1 restarts on touch
     uint8_t lfoGate;   // LFO: 0 gate while touched, 1 high for the first half of every cycle, 2 trigger every cycle, 3 trigger on every new note
-    uint8_t reserved;
+    uint8_t lfoPhase;  // LFO: phase offset, 0-255 for 0-360 degrees
     int16_t base;      // the output at the bottom of the slider, or the LFO's low point
     int16_t range;     // from base to the top of the slider, or to the LFO's high point; negative inverts
     uint16_t slewMs;   // SLIDE: glide time, 0-10000 ms
@@ -108,6 +108,9 @@ int modesPositionOf(int slider, int cents);
 // a value (cents) in 8 characters as the slider shows it: the note and the
 // volts when quantized ("C#2 2.08"), else the volts ("   2.08V")
 const char *modesValueText(int slider, int cents);
+
+// the nearest note (cents) of a scale (index, 0 = chromatic) from a root
+int modesQuantizeCents(int scale, int root, int cents);
 
 // tempo-synced LFOs start their cycle again, in phase with the sequencer
 void modesSyncRestart();

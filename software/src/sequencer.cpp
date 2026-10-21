@@ -25,14 +25,14 @@ static const Division DIVISIONS[NUM_SEQ_DIVISIONS] = {
 };
 static const char *DIRECTION_NAMES[NUM_SEQ_DIRECTIONS] = {"forward", "backward", "pendulum", "random"};
 
-static const SeqSettings DEFAULT_SETTINGS = {0, 4, SEQ_FORWARD, 0, {8, 8, 8, 8}, 120};
+static const SeqSettings DEFAULT_SETTINGS = {0, 4, 0, 0, 0, 120, {{7, 0, SEQ_FORWARD}, {7, 0, SEQ_FORWARD}, {7, 0, SEQ_FORWARD}, {7, 0, SEQ_FORWARD}}, 0x0F, 0};
 static const float CLOCK_SMOOTHING = 0.3f;  // how quickly a measured slider clock tempo follows
 static const uint32_t CLOCK_TIMEOUT_MS = 4000; // a slider clock slower than this is not measured
 
 SeqSettings seqSettings = DEFAULT_SETTINGS;
 
 static bool running = false;
-static int stage[NUM_VARS];
+static int step[NUM_VARS]; // every row's step within its length, counted from its start
 static bool pendulumUp[NUM_VARS];
 static int writeRow = -1;
 static uint32_t nextStepUs = 0;
@@ -61,31 +61,47 @@ float sequencerBeatSeconds()
     return 60.0f / constrain((int)seqSettings.bpm, 20, 300);
 }
 
-SeqSettings seqFromV1(const SeqSettingsV1 &old)
+SeqSettings seqFromV2(const SeqSettingsV2 &old)
 {
     SeqSettings s = DEFAULT_SETTINGS;
     s.clock = old.clock;
     s.div = old.div;
-    s.dir = old.dir;
     s.touch = old.touch;
-    for (int row = 0; row < NUM_VARS; row++)
-        s.steps[row] = old.steps;
     s.bpm = old.bpm;
+    for (int row = 0; row < NUM_VARS; row++)
+        s.rows[row] = {(uint8_t)(constrain((int)old.steps[row], 1, NUM_SLIDERS) - 1), 0, (uint8_t)(old.dir % NUM_SEQ_DIRECTIONS)};
     return s;
+}
+
+SeqSettings seqFromV1(const SeqSettingsV1 &old)
+{
+    SeqSettingsV2 v2 = {old.clock, old.div, old.dir, old.touch, {old.steps, old.steps, old.steps, old.steps}, old.bpm};
+    return seqFromV2(v2);
+}
+
+int sequencerRowStep(int row)
+{
+    return step[row];
+}
+
+int sequencerRowStage(int row)
+{
+    return (seqSettings.rows[row].start + step[row]) % NUM_SLIDERS;
 }
 
 static void goTo(int row, int next)
 {
-    stage[row] = next;
-    presetsSelectRow(row, next);
+    step[row] = next;
+    presetsSelectRow(row, sequencerRowStage(row));
 }
 
-// one row one step on, within its own length
+// one row one step on, within its length and in its direction
 static void advanceRow(int row)
 {
-    int steps = constrain((int)seqSettings.steps[row], 1, NUM_SLIDERS);
-    int at = stage[row];
-    switch (seqSettings.dir)
+    const SeqRow &r = seqSettings.rows[row];
+    int steps = r.length + 1;
+    int at = step[row];
+    switch (r.dir)
     {
     case SEQ_BACKWARD:
         goTo(row, at <= 0 || at >= steps ? steps - 1 : at - 1);
@@ -167,10 +183,54 @@ void sequencerUpdate()
 
 void sequencerTouch(int slider)
 {
-    // while writing, a touch only writes and the sequence keeps its step
-    if (!seqSettings.touch && writeRow < 0)
-        for (int row = 0; row < NUM_VARS; row++)
-            goTo(row, slider);
+    // while writing, a touch only writes and the sequence keeps its step;
+    // otherwise every row starts at the touched stage from now on
+    if (seqSettings.touch || writeRow >= 0)
+        return;
+    for (int row = 0; row < NUM_VARS; row++)
+    {
+        seqSettings.rows[row].start = slider;
+        pendulumUp[row] = true;
+        goTo(row, 0);
+    }
+}
+
+void sequencerNudge(int steps)
+{
+    if (running)
+        return;
+    for (int row = 0; row < NUM_VARS; row++)
+    {
+        int length = seqSettings.rows[row].length + 1;
+        goTo(row, ((step[row] + steps) % length + length) % length);
+    }
+}
+
+void sequencerShiftRow(int row, int stages)
+{
+    SeqRow &r = seqSettings.rows[row];
+    r.start = ((r.start + stages) % NUM_SLIDERS + NUM_SLIDERS) % NUM_SLIDERS;
+    presetsSelectRow(row, sequencerRowStage(row));
+}
+
+void sequencerChangeLength(int row, int stages)
+{
+    SeqRow &r = seqSettings.rows[row];
+    r.length = constrain((int)r.length + stages, 0, NUM_SLIDERS - 1);
+    if (step[row] > r.length)
+        goTo(row, r.length);
+}
+
+void sequencerNextDirection(int row)
+{
+    SeqRow &r = seqSettings.rows[row];
+    r.dir = (r.dir + 1) % NUM_SEQ_DIRECTIONS;
+}
+
+bool sequencerInWindow(int row, int stage)
+{
+    const SeqRow &r = seqSettings.rows[row];
+    return ((stage - r.start) % NUM_SLIDERS + NUM_SLIDERS) % NUM_SLIDERS <= r.length;
 }
 
 bool sequencerRunning()
@@ -199,12 +259,7 @@ void sequencerSetRunning(bool run)
 
 int sequencerStage()
 {
-    return stage[writeRow >= 0 ? writeRow : 0];
-}
-
-int sequencerRowStage(int row)
-{
-    return stage[row];
+    return sequencerRowStage(writeRow >= 0 ? writeRow : 0);
 }
 
 int sequencerWriteRow()
@@ -220,6 +275,12 @@ void sequencerSetWriteRow(int row)
 const char *seqDivisionName(int div)
 {
     return DIVISIONS[div].name;
+}
+
+const char *seqDirectionShortName(int dir)
+{
+    static const char *NAMES[NUM_SEQ_DIRECTIONS] = {"fwd", "bwd", "pend", "rnd"};
+    return NAMES[dir % NUM_SEQ_DIRECTIONS];
 }
 
 const char *seqDirectionName(int dir)

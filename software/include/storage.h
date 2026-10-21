@@ -18,4 +18,10 @@ bool storageLoad(int slot); // false if the slot is empty
 // something differs from the current slot (or the SYS settings) as saved
 bool storageUnsaved();
 
+// fresh starting points: faders, lfos, keys, split (4 keys, 4 LFOs); they
+// replace the sliders' settings, the sequencer and its values, unsaved
+constexpr int NUM_TEMPLATES = 4;
+const char *storageTemplateName(int index);
+void storageLoadTemplate(int index);
+
 #endif

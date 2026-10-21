@@ -29,7 +29,7 @@ struct RateRange
     float low;  // Hz
     float high; // Hz
 };
-static const RateRange LFO_RATES[NUM_LFO_RATES] = {
+static const RateRange LFO_RATES[LFO_RATE_SYNC] = { // the free ranges; sync has its own divisions
     {"slow", 0.02f, 1.0f},
     {"mid", 0.2f, 5.0f},
     {"fast", 1.0f, 25.0f},
@@ -300,13 +300,13 @@ bool modesOwnsGate(int slider)
     return usesTrig(sliderSettings[slider]);
 }
 
-// LFO rate from the slider position and the rate range, so a new range applies at once
 // tempo sync: the cycle length the slider position picks
 static int syncDivision(int slider)
 {
     return constrain(lfo[slider].position * NUM_SYNC_DIVISIONS / 1024, 0, NUM_SYNC_DIVISIONS - 1);
 }
 
+// LFO rate from the slider position and the rate range, so a new range applies at once
 static float lfoRate(int slider)
 {
     if (sliderSettings[slider].lfoRate == LFO_RATE_SYNC)
@@ -453,6 +453,11 @@ static int quantize(int slider, int position)
     return notes[step];
 }
 
+int modesQuantizeCents(int scale, int root, int cents)
+{
+    return nearestNote(SCALES[scale], root, (float)cents / CENTS_PER_VOLT) * SEMITONE_CENTS;
+}
+
 int modesValueAt(int slider, int position)
 {
     const SliderSettings &s = sliderSettings[slider];
@@ -547,6 +552,13 @@ static int slideTarget(int slider, int position, float &volts)
     return -1;
 }
 
+// the LFO's phase with its offset, 0-1: what the waveform, gate and LEDs follow
+static float lfoPhase(int slider)
+{
+    float phase = lfo[slider].phase + sliderSettings[slider].lfoPhase / 256.0f;
+    return phase - floorf(phase);
+}
+
 // LFO waveform at a phase, 0-1
 static float lfoShape(int slider, float phase)
 {
@@ -621,7 +633,7 @@ bool modesGate(int slider, bool touchGate)
     if (usesTrig(s))
         return trigActive[slider];
     if (s.mode == MODE_LFO && s.lfoGate == LFO_GATE_CYCLE)
-        return lfo[slider].phase < 0.5f;
+        return lfoPhase(slider) < 0.5f;
     return touchGate;
 }
 
@@ -693,10 +705,12 @@ void modesUpdate()
         l.lastUs = now;
         if (s.mode == MODE_LFO)
         {
+            // a cycle starts where the phase with its offset wraps
+            float before = lfoPhase(slider);
             l.phase += lfoRate(slider) * dt;
-            if (l.phase >= 1.0f)
+            l.phase -= floorf(l.phase);
+            if (lfoPhase(slider) < before)
             {
-                l.phase -= floorf(l.phase);
                 l.value = random(1001) / 1000.0f;
                 if (s.lfoGate == LFO_GATE_TRIG)
                     fireTrig(slider);
@@ -739,7 +753,7 @@ void modesUpdate()
 
         // LFO: swings from base to base + range, quantized to the nearest
         // scale note if a scale is set, with a trigger on every new note
-        float volts = (s.base + lfoShape(slider, l.phase) * lfoDepth(slider) * s.range) / CENTS_PER_VOLT;
+        float volts = (s.base + lfoShape(slider, lfoPhase(slider)) * lfoDepth(slider) * s.range) / CENTS_PER_VOLT;
         if (s.scale)
         {
             int semitone = nearestNote(SCALES[s.scale - 1], s.root, volts);
@@ -770,7 +784,7 @@ int modesOutputCode(int slider)
 
 int modesLfoLevel(int slider)
 {
-    return lroundf(lfoShape(slider, lfo[slider].phase) * lfoDepth(slider) * 1023.0f);
+    return lroundf(lfoShape(slider, lfoPhase(slider)) * lfoDepth(slider) * 1023.0f);
 }
 
 bool modesShowsDot(int slider)

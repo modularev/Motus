@@ -44,10 +44,15 @@ void setup()
     storageSetup();
     presetsSetup();
     modesSetup();
-    displayMessage("MOTUS");
+    // the slot loaded at start, for a second
+    char slot[9];
+    snprintf(slot, sizeof(slot), "slot %u", (unsigned)(storageCurrentSlot() + 1) % 10);
+    displayMessage("MOTUS", slot);
 }
 
 static const uint32_t LED_INTERVAL_MS = 20; // LEDs are redrawn 50 times a second
+static const float STEP_VIEW_DIM = 0.3f;     // stages other than the current one in a step view
+static const float WINDOW_LEVEL = 0.4f;      // stages inside the window while shifting it
 
 // last position of every control, drawn by updateLeds
 static int ledX[NUM_SENSORS];
@@ -224,17 +229,37 @@ static void updateLeds()
             brightness = blinkFast ? 1.0f : 0.0f;
         else if (recorderLoopStart(channel))
             flash = true;
+        else if (sequencerWriteRow() >= 0)
+        {
+            // step view: the current step stands out, the stage shown breathes
+            if (channel == sequencerStage())
+                brightness = 1.0f;
+            else if (channel == menuSelected())
+                brightness = STEP_VIEW_DIM + (1.0f - STEP_VIEW_DIM) * breath;
+            else
+                brightness = STEP_VIEW_DIM;
+        }
         else if (menuActive() && channel == menuSelected())
             brightness = breath;
 
         if (isSlider(channel))
         {
             // armed recording blinks the top LEDs; a running sequencer lights its stage's
-            int top = recorderArmed() ? (blinkSlow ? 1 : 0) : (sequencerRunning() && channel == sequencerStage() ? 1 : -1);
+            // the current stage's top LED: while running, and always in a step view
+            bool stageMark = (sequencerRunning() || sequencerWriteRow() >= 0) && channel == sequencerStage();
+            int top = recorderArmed() ? (blinkSlow ? 1 : 0) : (stageMark ? 1 : -1);
             bool note = modesShowsDot(channel);
             int row = sequencerWriteRow();
             if (flash)
                 setSliderLED(channel, 1023, brightness, top);
+            else if (row >= 0 && menuShifting())
+            {
+                // shifting: the stages inside the row's window light up, the playing one brightest
+                if (sequencerInWindow(row, channel))
+                    setSliderLED(channel, 1023, channel == sequencerStage() ? 1.0f : WINDOW_LEVEL);
+                else
+                    setSliderLED(channel, 0);
+            }
             else if (row >= 0)
             {
                 // WRITE: the row's value of this stage, where it lies on the slider

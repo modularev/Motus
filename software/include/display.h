@@ -21,7 +21,10 @@ void displayMenu(const char *top, const char *bottom);
 
 // a title over a progress bar (0-1); call every loop while it runs
 void displayProgress(const char *top, float fraction);
-void displayStatus(int preset, bool fine, int slot, bool unsaved);
+// idle screen: the sequencer state with its tempo ("120" or "S3"); while
+// running every row's progress through its length (1-5, a bar each), when
+// stopped the slot; and the unsaved marker
+void displayStatus(const int progress[], bool running, const char *tempo, int slot, bool unsaved);
 void displayRecordState(bool armed, bool recording);
 void displayMessage(const char *text, const char *second = "");
 

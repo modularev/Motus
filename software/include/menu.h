@@ -18,6 +18,9 @@ bool menuActive();
 int menuSelected(); // the slider being edited
 bool menuPadHeld(); // a SET pad is held: a slider touch only selects
 
+// a step view is open with a SET pad held: the row's window is being shifted
+bool menuShifting();
+
 // WRITE: report a slider's touch; while it is held the encoder edits its
 // stage value, and once it has, the finger stops writing for that touch
 void menuWriteTouch(int slider, bool touching);

@@ -16,7 +16,9 @@ static const int SLOT_SIZE = 224;
 static const int SYSTEM_ADDRESS = SLOT_ADDRESS + NUM_SLOTS * SLOT_SIZE;
 
 static const uint32_t DIRECTORY_MAGIC = 0x4D4F4431; // "MOD1"
-static const uint32_t SLOT_MAGIC = 0x4D4F5034;      // "MOP4"
+static const uint32_t SLOT_MAGIC = 0x4D4F5036;      // "MOP6"
+static const uint32_t SLOT_MAGIC_V5 = 0x4D4F5035;   // "MOP5": without the sequencer's quantizer
+static const uint32_t SLOT_MAGIC_V4 = 0x4D4F5034;   // "MOP4": a length per row, one direction
 static const uint32_t SLOT_MAGIC_V3 = 0x4D4F5033;   // "MOP3": one sequence length for all rows
 static const uint32_t SLOT_MAGIC_V2 = 0x4D4F5032;   // "MOP2": without the sequencer settings
 static const uint32_t SLOT_MAGIC_V1 = 0x4D4F5031;   // "MOP1": also the var presets as DAC values
@@ -136,6 +138,22 @@ bool storageLoad(int slot)
 
     Slot loaded;
     EEPROM.get(slotAddress(slot), loaded);
+    if (loaded.magic == SLOT_MAGIC_V5)
+    {
+        // the same layout, the quantizer was not there yet
+        loaded.sequencer.scale = 0;
+        loaded.sequencer.root = 0;
+        loaded.sequencer.quantRows = 0x0F;
+        loaded.sequencer.reserved = 0;
+        loaded.magic = SLOT_MAGIC;
+    }
+    if (loaded.magic == SLOT_MAGIC_V4)
+    {
+        SeqSettingsV2 old;
+        EEPROM.get(slotAddress(slot) + offsetof(Slot, sequencer), old);
+        loaded.sequencer = seqFromV2(old);
+        loaded.magic = SLOT_MAGIC;
+    }
     if (loaded.magic == SLOT_MAGIC_V3)
     {
         // the same layout up to the sequencer settings, which had one length
@@ -170,4 +188,55 @@ bool storageUnsaved()
     Slot now;
     capture(now);
     return memcmp(&now, &saved, sizeof(now)) != 0 || memcmp(&systemSettings, &savedSystem, sizeof(savedSystem)) != 0;
+}
+
+// Templates: fresh starting points, offered by LOAD after the slots
+static const char *TEMPLATE_NAMES[NUM_TEMPLATES] = {"faders", "lfos", "keys", "split"};
+
+const char *storageTemplateName(int index)
+{
+    return TEMPLATE_NAMES[index];
+}
+
+static void makeLfo(SliderSettings &s)
+{
+    s.mode = MODE_LFO;
+    s.lfoShape = LFO_SINE;
+    s.lfoRate = 1; // mid
+    s.lfoGate = 1; // a clock: high for the first half of every cycle
+    s.base = 0;
+    s.range = 5 * CENTS_PER_VOLT;
+}
+
+static void makeKeys(SliderSettings &s)
+{
+    s.scale = SCALE_MAJOR + 1;
+    s.root = 0;
+    s.base = 2 * CENTS_PER_VOLT; // C2
+    s.range = 2 * CENTS_PER_VOLT; // two octaves
+}
+
+void storageLoadTemplate(int index)
+{
+    modesDefaults(); // faders: 0-8 V
+    for (int slider = 0; slider < NUM_SLIDERS; slider++)
+    {
+        SliderSettings &s = sliderSettings[slider];
+        if (index == 1)
+        {
+            makeLfo(s);
+            s.lfoPhase = slider * 256 / NUM_SLIDERS; // 0, 45, 90 ... 315 degrees
+        }
+        else if (index == 3 && slider >= NUM_SLIDERS / 2)
+        {
+            makeLfo(s);
+            s.lfoPhase = (slider - NUM_SLIDERS / 2) * 256 / (NUM_SLIDERS / 2); // 0, 90, 180, 270 degrees
+        }
+        else if (index == 2 || index == 3)
+            makeKeys(s);
+    }
+
+    uint16_t zero[NUM_PRESETS][NUM_VARS] = {};
+    presetsSetAll(zero);
+    sequencerDefaults();
 }

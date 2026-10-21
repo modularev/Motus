@@ -23,13 +23,14 @@ static const int FAST_FACTOR = 4;
 enum Page
 {
     PAGE_NONE,
-    PAGE_MODE,
-    PAGE_SEQ,
-    PAGE_EDIT,
-    PAGE_SYS
+    PAGE_SLIDER, // SET 1: the slider's settings
+    PAGE_SEQ,    // SET 2: the sequencer
+    PAGE_STEPS,  // SET 3: the rows' lengths, starts and directions
+    PAGE_SYS     // SET 4
 };
 
-// Settings on the EDIT page, in their order for each mode
+// Settings on the slider page, in their order for each mode: first whether
+// the slider runs an LFO, then the settings of that mode
 enum Setting
 {
     SETTING_QUANT,
@@ -44,10 +45,12 @@ enum Setting
     SETTING_DEPTH,
     SETTING_RESET,
     SETTING_LFO_GATE,
+    SETTING_LFO,
+    SETTING_PHASE,
 };
-static const Setting SLIDE_SETTINGS[] = {SETTING_QUANT, SETTING_ROOT, SETTING_BASE, SETTING_RANGE,
+static const Setting SLIDE_SETTINGS[] = {SETTING_LFO, SETTING_QUANT, SETTING_ROOT, SETTING_BASE, SETTING_RANGE,
                                          SETTING_PLAY, SETTING_SLEW, SETTING_SLIDE_GATE};
-static const Setting LFO_SETTINGS[] = {SETTING_SHAPE, SETTING_RATE, SETTING_BASE, SETTING_RANGE, SETTING_DEPTH,
+static const Setting LFO_SETTINGS[] = {SETTING_LFO, SETTING_SHAPE, SETTING_RATE, SETTING_PHASE, SETTING_BASE, SETTING_RANGE, SETTING_DEPTH,
                                        SETTING_QUANT, SETTING_ROOT, SETTING_RESET, SETTING_LFO_GATE};
 static const int NUM_SLIDE_SETTINGS = sizeof(SLIDE_SETTINGS) / sizeof(SLIDE_SETTINGS[0]);
 static const int NUM_LFO_SETTINGS = sizeof(LFO_SETTINGS) / sizeof(LFO_SETTINGS[0]);
@@ -69,13 +72,24 @@ enum SeqItem
     SEQ_CLOCK,
     SEQ_BPM,
     SEQ_DIV,
-    SEQ_DIR,
-    SEQ_STEPS_1, // the length of every row
-    SEQ_STEPS_4 = SEQ_STEPS_1 + NUM_VARS - 1,
     SEQ_TOUCH,
+    SEQ_QUANT, // the quantizer of the var outputs
+    SEQ_ROOT,
+    SEQ_ROWS,  // which rows it applies to
     NUM_SEQ_ITEMS
 };
-static const char *SEQ_NAMES[NUM_SEQ_ITEMS] = {"RUN", "CLOCK", "BPM", "DIV", "DIR", "V1 STEPS", "V2 STEPS", "V3 STEPS", "V4 STEPS", "TOUCH"};
+static const char *SEQ_NAMES[NUM_SEQ_ITEMS] = {"RUN", "CLOCK", "BPM", "DIV", "TOUCH", "QUANT", "ROOT", "ROWS"};
+
+// settings on the steps page: for every row its length, start and direction
+enum StepKind
+{
+    STEP_LEN,
+    STEP_SHIFT,
+    STEP_DIR,
+    NUM_STEP_KINDS
+};
+static const int NUM_STEP_ITEMS = NUM_VARS * NUM_STEP_KINDS;
+static const char *STEP_NAMES[NUM_STEP_KINDS] = {"LEN", "SHIFT", "DIR"};
 
 // WRITE: a slider held while the encoder turns gets its stage value edited
 static int writeHeld = -1;
@@ -127,7 +141,9 @@ static int itemCount(Page p)
     {
     case PAGE_SEQ:
         return NUM_SEQ_ITEMS;
-    case PAGE_EDIT:
+    case PAGE_STEPS:
+        return NUM_STEP_ITEMS;
+    case PAGE_SLIDER:
         return sliderSettings[slider].mode == MODE_LFO ? NUM_LFO_SETTINGS : NUM_SLIDE_SETTINGS;
     case PAGE_SYS:
         return NUM_SYS_ITEMS;
@@ -260,10 +276,24 @@ static void change(int detents)
 
     switch (page)
     {
-    case PAGE_MODE:
-        stepSetting(s.mode, detents, 0, NUM_MODES - 1);
-        item = 0;
+    case PAGE_STEPS:
+    {
+        // bitfields: stepped through an int
+        SeqRow &r = seqSettings.rows[item / NUM_STEP_KINDS];
+        switch (item % NUM_STEP_KINDS)
+        {
+        case STEP_LEN:
+            r.length = constrain((int)r.length + detents, 0, NUM_SLIDERS - 1);
+            break;
+        case STEP_SHIFT:
+            r.start = constrain((int)r.start + detents, 0, NUM_SLIDERS - 1);
+            break;
+        case STEP_DIR:
+            r.dir = constrain((int)r.dir + detents, 0, NUM_SEQ_DIRECTIONS - 1);
+            break;
+        }
         break;
+    }
 
     case PAGE_SEQ:
     {
@@ -282,29 +312,37 @@ static void change(int detents)
         case SEQ_DIV:
             stepSetting(q.div, detents, 0, NUM_SEQ_DIVISIONS - 1);
             break;
-        case SEQ_DIR:
-            stepSetting(q.dir, detents, 0, NUM_SEQ_DIRECTIONS - 1);
-            break;
-        case SEQ_STEPS_1:
-        case SEQ_STEPS_1 + 1:
-        case SEQ_STEPS_1 + 2:
-        case SEQ_STEPS_4:
-            stepSetting(q.steps[item - SEQ_STEPS_1], detents, 1, NUM_SLIDERS);
-            break;
         case SEQ_TOUCH:
             stepSetting(q.touch, detents, 0, 1);
             break;
+        case SEQ_QUANT:
+            q.scale = constrain((int)q.scale + detents, 0, NUM_SCALES);
+            break;
+        case SEQ_ROOT:
+            q.root = constrain((int)q.root + detents, 0, 11);
+            break;
+        case SEQ_ROWS:
+            q.quantRows = constrain((int)q.quantRows + detents, 0, (1 << NUM_VARS) - 1);
+            break;
         }
+        presetsRefresh(); // the outputs follow a new quantizer at once
         break;
     }
 
-    case PAGE_EDIT:
+    case PAGE_SLIDER:
     {
         // big steps stay single, small steps speed up when turning fast
         int voltStep = s.scale ? (fine ? SEMITONE_CENTS * fastFactor() : OCTAVE_CENTS)
                                : (fine ? VOLT_FINE_STEP * fastFactor() : VOLT_COARSE_STEP);
         switch (currentSetting())
         {
+        case SETTING_LFO:
+            stepSetting(s.mode, detents, MODE_SLIDE, MODE_LFO);
+            break;
+        case SETTING_PHASE:
+            // 45 degree steps, or about 1.4 with FINE, wrapping around
+            s.lfoPhase = (s.lfoPhase + detents * (fine ? 1 : 32)) & 0xFF;
+            break;
         case SETTING_QUANT:
             stepSetting(s.scale, detents, 0, NUM_SCALES);
             break;
@@ -377,6 +415,12 @@ static void formatSetting(char *bottom, size_t size, Setting setting, const Slid
 {
     switch (setting)
     {
+    case SETTING_LFO:
+        snprintf(bottom, size, "%8s", s.mode == MODE_LFO ? "on" : "off");
+        break;
+    case SETTING_PHASE:
+        snprintf(bottom, size, "%7u%c", (unsigned)lroundf(s.lfoPhase * 360.0f / 256) % 1000, 0xDF); // the degree sign
+        break;
     case SETTING_QUANT:
         snprintf(bottom, size, "%8s", s.scale ? scaleName(s.scale - 1) : "off");
         break;
@@ -439,7 +483,7 @@ static void formatSetting(char *bottom, size_t size, Setting setting, const Slid
 static void show()
 {
     static const char *SETTING_NAMES[] = {"QUANT", "ROOT", "BASE", "RANGE", "PLAY", "SLEW",
-                                          "GATE", "SHAPE", "RATE", "DEPTH", "RESET", "GATE"};
+                                          "GATE", "SHAPE", "RATE", "DEPTH", "RESET", "GATE", "LFO", "PHASE"};
     char top[9];
     char bottom[9];
     const SliderSettings &s = sliderSettings[slider];
@@ -447,10 +491,25 @@ static void show()
 
     switch (page)
     {
-    case PAGE_MODE:
-        snprintf(top, sizeof(top), "S%u MODE", number);
-        snprintf(bottom, sizeof(bottom), "%8s", modeName(s.mode));
+    case PAGE_STEPS:
+    {
+        int row = item / NUM_STEP_KINDS;
+        const SeqRow &r = seqSettings.rows[row];
+        snprintf(top, sizeof(top), "V%u %s", (unsigned)(row + 1) % 10, STEP_NAMES[item % NUM_STEP_KINDS]);
+        switch (item % NUM_STEP_KINDS)
+        {
+        case STEP_LEN:
+            snprintf(bottom, sizeof(bottom), "%8u", (unsigned)r.length + 1);
+            break;
+        case STEP_SHIFT:
+            snprintf(bottom, sizeof(bottom), "%8u", (unsigned)r.start + 1);
+            break;
+        case STEP_DIR:
+            snprintf(bottom, sizeof(bottom), "%8s", seqDirectionName(r.dir));
+            break;
+        }
         break;
+    }
 
     case PAGE_SEQ:
     {
@@ -477,23 +536,30 @@ static void show()
         case SEQ_DIV:
             snprintf(bottom, sizeof(bottom), "%8s", seqDivisionName(q.div));
             break;
-        case SEQ_DIR:
-            snprintf(bottom, sizeof(bottom), "%8s", seqDirectionName(q.dir));
-            break;
-        case SEQ_STEPS_1:
-        case SEQ_STEPS_1 + 1:
-        case SEQ_STEPS_1 + 2:
-        case SEQ_STEPS_4:
-            snprintf(bottom, sizeof(bottom), "%8u", (unsigned)q.steps[item - SEQ_STEPS_1] % 10);
-            break;
         case SEQ_TOUCH:
             snprintf(bottom, sizeof(bottom), "%8s", q.touch ? "ignore" : "jump");
             break;
+        case SEQ_QUANT:
+            snprintf(bottom, sizeof(bottom), "%8s", q.scale ? scaleName(q.scale - 1) : "off");
+            break;
+        case SEQ_ROOT:
+            snprintf(bottom, sizeof(bottom), "%8s", noteName(q.root));
+            break;
+        case SEQ_ROWS:
+        {
+            // e.g. " 1 2 - -": the rows quantized
+            char rows[9] = " - - - -";
+            for (int row = 0; row < NUM_VARS; row++)
+                if (q.quantRows & (1 << row))
+                    rows[1 + 2 * row] = '1' + row;
+            snprintf(bottom, sizeof(bottom), "%s", rows);
+            break;
+        }
         }
         break;
     }
 
-    case PAGE_EDIT:
+    case PAGE_SLIDER:
     {
         Setting setting = currentSetting();
         snprintf(top, sizeof(top), "S%u%c%s", number, fine ? GLYPH_FINE : ' ', SETTING_NAMES[setting]);
@@ -540,15 +606,27 @@ void menuUpdate(uint8_t buttons)
     // settings page. With a settings page open, the encoder scrolls through
     // the settings, holding FINE and turning changes the value, a tap on its
     // pad closes it and a tap on another pad switches to that page.
-    static const Page PAGES[4] = {PAGE_MODE, PAGE_SEQ, PAGE_EDIT, PAGE_SYS};
-    static uint32_t lastTapMs[4];
+    static const Page PAGES[4] = {PAGE_SLIDER, PAGE_SEQ, PAGE_STEPS, PAGE_SYS};
+    static uint32_t openedMs = 0;     // when a tap opened the step view: a second tap soon opens the settings
+    static uint32_t closeTapMs = 0;   // a tap in the step view closes it after the double-tap time...
+    static bool closePending = false; // ...unless a second tap cycles the row's direction
     static bool turned[4]; // the encoder turned while the pad was held, so letting go is no tap
     int heldPad = -1;
     for (int i = 0; i < 4; i++)
     {
         uint8_t bit = 1 << (BUTTON_SET_1 + i);
         if (pressed & bit)
+        {
             turned[i] = false;
+            // in a step view, touching another row's pad switches to its view at
+            // once (for shifting it); letting go then is no tap
+            if (stepView >= 0 && stepView != i)
+            {
+                stepView = i;
+                turned[i] = true;
+                lastInput = now;
+            }
+        }
         if (buttons & bit)
             heldPad = i;
         if (!(released & bit) || turned[i])
@@ -561,25 +639,39 @@ void menuUpdate(uint8_t buttons)
             page = PAGES[i]; // switch settings pages with a single tap
             item = 0;
         }
-        else if (now - lastTapMs[i] < DOUBLE_TAP_MS)
+        else if (stepView == i && now - openedMs < DOUBLE_TAP_MS)
         {
+            // a double tap from the idle screen: the first tap opened the view
             closeViews();
             page = PAGES[i];
             item = 0;
-            lastTapMs[i] = 0;
-            lastInput = now;
-            continue;
+        }
+        else if (stepView == i && closePending && now - closeTapMs < DOUBLE_TAP_MS)
+        {
+            // a double tap in the step view: the row's next direction
+            closePending = false;
+            sequencerNextDirection(i);
+            char title[9];
+            snprintf(title, sizeof(title), "V%u DIR", (unsigned)(i + 1) % 10);
+            displayMessage(title, seqDirectionName(seqSettings.rows[i].dir));
         }
         else if (stepView == i)
-            closeViews();
+        {
+            closePending = true;
+            closeTapMs = now;
+        }
         else
         {
             closeViews();
             stepView = i;
+            openedMs = now;
         }
-        lastTapMs[i] = now;
         lastInput = now;
     }
+    if (closePending && now - closeTapMs >= DOUBLE_TAP_MS)
+        closeViews();
+    if (stepView < 0)
+        closePending = false;
 
     // FINE: a tap (on lift) toggles fine steps; held while the encoder turns,
     // it edits the value instead and the toggle stays
@@ -588,8 +680,21 @@ void menuUpdate(uint8_t buttons)
     bool fineHeld = buttons & fineBit;
     if (pressed & fineBit)
         fineTurned = false;
+    static uint32_t fineTapMs = 0;
     if ((released & fineBit) && !fineTurned)
+    {
         fine = !fine;
+        if (now - fineTapMs < DOUBLE_TAP_MS)
+        {
+            // a double tap: run or stop, and the fine toggle stays as it was
+            fine = !fine;
+            sequencerSetRunning(!sequencerRunning());
+            displayMessage(sequencerRunning() ? "RUN" : "STOP");
+            fineTapMs = 0;
+        }
+        else
+            fineTapMs = now;
+    }
 
     // SAVE / LOAD prompt
     uint8_t cancelPads = (1 << BUTTON_SET_1) | (1 << BUTTON_SET_2) | (1 << BUTTON_SET_3) | (1 << BUTTON_SET_4) | (1 << BUTTON_FINE);
@@ -604,6 +709,13 @@ void menuUpdate(uint8_t buttons)
         {
             prompt = p;
             promptSlot = storageCurrentSlot();
+        }
+        else if (p == PROMPT_LOAD && promptSlot >= NUM_SLOTS)
+        {
+            // a template: a fresh start, unsaved
+            storageLoadTemplate(promptSlot - NUM_SLOTS);
+            displayMessage("INIT", storageTemplateName(promptSlot - NUM_SLOTS));
+            prompt = PROMPT_NONE;
         }
         else
         {
@@ -637,17 +749,60 @@ void menuUpdate(uint8_t buttons)
             sinceDetent = 0;
             lastInput = now;
         }
+        else if (stepView >= 0)
+        {
+            if (heldPad >= 0 && fineHeld)
+            {
+                // a SET pad and FINE held: the row's length
+                sequencerChangeLength(stepView, detents);
+                fineTurned = true;
+            }
+            else if (heldPad >= 0)
+            {
+                // a SET pad held: the row's start and end move together, wrapping
+                sequencerShiftRow(stepView, detents);
+                slider = sequencerRowStage(stepView);
+            }
+            else if (fineHeld)
+            {
+                // FINE held: the shown stage's value, semitones or 0.01 V with FINE on
+                int step = fine ? VAR_FINE_STEP : VAR_COARSE_STEP * fastFactor();
+                presetSetValue(slider, stepView, presetValue(slider, stepView) + detents * step);
+                fineTurned = true;
+                sinceDetent = 0;
+            }
+            else if (!sequencerRunning())
+            {
+                // stopped: step the sequence by hand, as on the idle screen; the
+                // stage shown follows the row's current step
+                sequencerNudge(detents);
+                slider = sequencerRowStage(stepView);
+            }
+            else
+                slider = ((slider + detents) % NUM_SLIDERS + NUM_SLIDERS) % NUM_SLIDERS; // running: browse the stages
+            lastInput = now;
+        }
         else if (prompt != PROMPT_NONE)
         {
-            promptSlot = ((promptSlot + detents) % NUM_SLOTS + NUM_SLOTS) % NUM_SLOTS;
+            // SAVE: the slots; LOAD: the slots and then the templates
+            int count = prompt == PROMPT_LOAD ? NUM_SLOTS + NUM_TEMPLATES : NUM_SLOTS;
+            promptSlot = ((promptSlot + detents) % count + count) % count;
             promptInput = now;
         }
+        else if (!menuActive())
+            sequencerNudge(detents); // idle and stopped: step the sequence by hand
         else if (page != PAGE_NONE)
         {
             if (fineHeld)
             {
                 change(detents); // FINE held: the value
                 fineTurned = true;
+            }
+            else if (page == PAGE_SLIDER && heldPad >= 0 && PAGES[heldPad] == PAGE_SLIDER)
+            {
+                // SET 1 held on the slider page: which slider is edited
+                slider = ((slider + detents) % NUM_SLIDERS + NUM_SLIDERS) % NUM_SLIDERS;
+                item = min(item, itemCount(page) - 1);
             }
             else
             {
@@ -668,26 +823,65 @@ void menuUpdate(uint8_t buttons)
 
     if (prompt != PROMPT_NONE)
     {
-        // SAVE 2? / LOAD 2?, and what is in the slot
+        // SAVE 2? / LOAD 2? and what is in the slot, or INIT? and a template
         char top[9];
-        snprintf(top, sizeof(top), "%s %u?", prompt == PROMPT_SAVE ? "SAVE" : "LOAD", (unsigned)(promptSlot + 1) % 10);
-        const char *state = promptSlot == storageCurrentSlot() && storageSlotUsed(promptSlot) ? "current"
-                            : storageSlotUsed(promptSlot)                                  ? (prompt == PROMPT_SAVE ? "replace" : "")
-                                                                                            : "empty";
         char bottom[9];
-        snprintf(bottom, sizeof(bottom), "%8s", state);
+        if (promptSlot >= NUM_SLOTS)
+        {
+            snprintf(top, sizeof(top), "INIT?");
+            snprintf(bottom, sizeof(bottom), "%8s", storageTemplateName(promptSlot - NUM_SLOTS));
+        }
+        else
+        {
+            snprintf(top, sizeof(top), "%s %u?", prompt == PROMPT_SAVE ? "SAVE" : "LOAD", (unsigned)(promptSlot + 1) % 10);
+            const char *state = promptSlot == storageCurrentSlot() && storageSlotUsed(promptSlot) ? "current"
+                                : storageSlotUsed(promptSlot)                                  ? (prompt == PROMPT_SAVE ? "replace" : "")
+                                                                                                : "empty";
+            snprintf(bottom, sizeof(bottom), "%8s", state);
+        }
         displayMenu(top, bottom);
     }
     else if (stepView >= 0)
     {
-        // V1 S3 over the step's value, e.g. "C#2 2.08"
+        // the row and its direction over the shown stage's value ("V1 fwd ±" /
+        // "C#2 2.08"); the LEDs show which stages. While a SET pad is held:
+        // the row's start, or with FINE its length
+        const SeqRow &r = seqSettings.rows[stepView];
+        unsigned row = (unsigned)(stepView + 1) % 10;
         char top[9];
-        snprintf(top, sizeof(top), "V%u S%u %c", (unsigned)(stepView + 1) % 10, (unsigned)(slider + 1) % 10, fine ? GLYPH_FINE : ' ');
-        displayMenu(top, modesValueText(slider, presetValue(slider, stepView)));
+        char bottom[9];
+        if (heldPad >= 0 && fineHeld)
+        {
+            snprintf(top, sizeof(top), "V%u LEN", row);
+            snprintf(bottom, sizeof(bottom), "%2u steps", (unsigned)r.length + 1);
+        }
+        else if (heldPad >= 0)
+        {
+            snprintf(top, sizeof(top), "V%u SHIFT", row);
+            snprintf(bottom, sizeof(bottom), "from %3u", (unsigned)r.start + 1);
+        }
+        else
+        {
+            snprintf(top, sizeof(top), "V%u %-4s%c", row, seqDirectionShortName(r.dir), fine ? GLYPH_FINE : ' ');
+            snprintf(bottom, sizeof(bottom), "%s", modesValueText(slider, presetValue(slider, stepView)));
+        }
+        displayMenu(top, bottom);
     }
     else
         show();
-    displayStatus(presetsSelected(), fine, storageCurrentSlot(), storageUnsaved());
+    // every row's progress through its length, as a bar of 1-5 columns
+    int progress[NUM_VARS];
+    for (int row = 0; row < NUM_VARS; row++)
+    {
+        int length = seqSettings.rows[row].length + 1;
+        progress[row] = ((sequencerRowStep(row) + 1) * 5 + length - 1) / length;
+    }
+    char tempo[4];
+    if (seqSettings.clock)
+        snprintf(tempo, sizeof(tempo), "S%u", (unsigned)seqSettings.clock % 10);
+    else
+        snprintf(tempo, sizeof(tempo), "%u", (unsigned)seqSettings.bpm % 1000);
+    displayStatus(progress, sequencerRunning(), tempo, storageCurrentSlot(), storageUnsaved());
 }
 
 bool menuActive()
@@ -716,6 +910,11 @@ void menuWriteTouch(int touched, bool touching)
 bool menuWriteEdited(int slider)
 {
     return slider == writeHeld && writeEdited;
+}
+
+bool menuShifting()
+{
+    return stepView >= 0 && menuPadHeld();
 }
 
 bool menuPadHeld()

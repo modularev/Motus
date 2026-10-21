@@ -12,6 +12,9 @@ void presetsSetup();
 // the var outputs switch to a slider's preset: all of them, or one row
 void presetsSelect(int slider);
 void presetsSelectRow(int var, int slider);
+
+// the outputs again, e.g. after the sequencer's quantizer changed
+void presetsRefresh();
 int presetsSelected(); // row 1's
 
 // values in cents of a volt (1/1200 V), like BASE and RANGE

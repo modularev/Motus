@@ -18,10 +18,11 @@ static const int BAR_STEPS = LCD_COLS * BAR_COLUMNS_PER_CELL;
 
 static LiquidCrystal lcd(LCD_RS_PIN, LCD_RW_PIN, LCD_ENABLE_PIN, LCD_D4_PIN, LCD_D5_PIN, LCD_D6_PIN, LCD_D7_PIN);
 
-static int statusPreset = 0;
+static int statusProgress[NUM_VARS];
 static int statusSlot = 0;
+static bool statusRunning = false;
+static char statusTempo[4];
 static bool statusUnsaved = false;
-static bool statusFine = false;
 static bool statusArmed = false;
 static bool statusRecording = false;
 
@@ -90,12 +91,13 @@ void displaySlider(int channel, int position, int pressure, bool recording, cons
     if (!claimScreen(channel))
         return;
 
+    // the value only: the touched slider is where the finger is
     if (text[0])
-        snprintf(wanted[0], sizeof(wanted[0]), "S%u%6s", (unsigned)(channel + 1) % 10, text);
+        snprintf(wanted[0], sizeof(wanted[0]), "%8s", text);
     else
-        snprintf(wanted[0], sizeof(wanted[0]), "S%u%6d", (unsigned)(channel + 1) % 10, constrain(position, 0, 1023));
+        snprintf(wanted[0], sizeof(wanted[0]), "%8d", constrain(position, 0, 1023));
     if (recording)
-        wanted[0][2] = GLYPH_DOT;
+        wanted[0][0] = GLYPH_DOT;
 
     // position bar, or pressure bar while pressing
     if (pressure > 0)
@@ -137,11 +139,12 @@ void displayMenu(const char *top, const char *bottom)
     menuUntil = millis() + MENU_HOLD_MS;
 }
 
-void displayStatus(int preset, bool fine, int slot, bool unsaved)
+void displayStatus(const int progress[], bool running, const char *tempo, int slot, bool unsaved)
 {
-    statusPreset = preset;
-    statusFine = fine;
+    memcpy(statusProgress, progress, sizeof(statusProgress));
     statusSlot = slot;
+    statusRunning = running;
+    snprintf(statusTempo, sizeof(statusTempo), "%s", tempo);
     statusUnsaved = unsaved;
 }
 
@@ -167,11 +170,26 @@ void displayUpdate()
     if (activeChannel < 0 || millis() - lastSeen[activeChannel] > IDLE_TIMEOUT_MS)
     {
         activeChannel = -1;
-        // Slot 2*  (unsaved changes, recording dot)
-        // Preset 3 (the FINE indicator between word and number)
+        // running: RUN 120● over a bar per row filling up through its length, and *
+        // stopped:  STOP 120 over Slot 2●*      (S3 instead of 120 with a slider clock)
         bool dot = statusRecording || (statusArmed && (millis() / ARMED_BLINK_MS) % 2 == 0);
-        snprintf(wanted[0], sizeof(wanted[0]), "Slot %u%c%c", (unsigned)(statusSlot + 1) % 10, statusUnsaved ? '*' : ' ', dot ? GLYPH_DOT : ' ');
-        snprintf(wanted[1], sizeof(wanted[1]), "Preset%c%u", statusFine ? GLYPH_FINE : ' ', (unsigned)(statusPreset + 1) % 10);
+        char unsaved = statusUnsaved ? '*' : ' ';
+        if (statusRunning)
+        {
+            snprintf(wanted[0], sizeof(wanted[0]), "RUN %3s%c", statusTempo, dot ? GLYPH_DOT : ' ');
+            for (int row = 0; row < NUM_VARS; row++)
+            {
+                wanted[1][2 * row] = constrain(statusProgress[row], 1, BAR_COLUMNS_PER_CELL); // bar glyphs 1-5
+                wanted[1][2 * row + 1] = ' ';
+            }
+            wanted[1][LCD_COLS - 1] = unsaved;
+            wanted[1][LCD_COLS] = 0;
+        }
+        else
+        {
+            snprintf(wanted[0], sizeof(wanted[0]), "STOP %3s", statusTempo);
+            snprintf(wanted[1], sizeof(wanted[1]), "Slot %u%c%c", (unsigned)(statusSlot + 1) % 10, dot ? GLYPH_DOT : ' ', unsaved);
+        }
     }
 
     if (millis() < menuUntil)
