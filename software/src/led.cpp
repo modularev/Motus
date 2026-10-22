@@ -87,7 +87,7 @@ void ledSetup()
     }
 }
 
-void setSliderLED(int slider_channel, int value, float brightness, int top, bool dot)
+void setSliderLED(int slider_channel, int value, float brightness, float top, bool dot)
 {
     static const float div_const = 0.005847953216; // 10bit value divided into 6 parts (1024 / 170.66 )
 
@@ -107,7 +107,7 @@ void setSliderLED(int slider_channel, int value, float brightness, int top, bool
         if (dot)
             level = max(0.0f, 1.0f - fabsf(i - dotAt)) * 4095;
         if (i == LEDS_PER_SLIDER - 1 && top >= 0)
-            level = top ? 4095 : 0;
+            level = constrain(top, 0.0f, 1.0f) * 4095;
         else
             level *= brightness;
 

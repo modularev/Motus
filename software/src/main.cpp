@@ -53,6 +53,7 @@ void setup()
 static const uint32_t LED_INTERVAL_MS = 20; // LEDs are redrawn 50 times a second
 static const float STEP_VIEW_DIM = 0.3f;     // stages other than the current one in a step view
 static const float WINDOW_LEVEL = 0.4f;      // stages inside the window while shifting it
+static const float MARK_PASSING = 0.15f;     // the shown stage's top LED while the step passes through it
 
 // last position of every control, drawn by updateLeds
 static int ledX[NUM_SENSORS];
@@ -105,9 +106,12 @@ static void outputPad(int channel, int x, int y, int pressure)
 
 // read one sensor and route its values, live or from a recording, to the
 // outputs, LEDs and display; returns whether its gate is on
+static bool anyTouched; // this scan, for autosave
+
 static bool updateChannel(int channel)
 {
     TouchReading reading = sensorRead(channel);
+    anyTouched |= reading.touched;
     bool slider = isSlider(channel);
 
     // A touch while a SET pad is held only selects the slider for the menu:
@@ -123,6 +127,32 @@ static bool updateChannel(int channel)
     {
         if (!reading.touched)
             selectOnly[channel] = false;
+        reading = TouchReading{};
+    }
+
+    // A step view: a touch writes its position, in the row's range, into the row
+    // at its stage, until the encoder edits it while the slider is held. The
+    // slider's own outputs stay as they are and a loop keeps playing.
+    int writeRow = sequencerWriteRow();
+    if (slider && writeRow >= 0)
+    {
+        SliderSettings range;
+        sequencerRowRange(writeRow, range);
+        if (reading.started)
+            menuSelect(channel);
+        if (reading.started || reading.touched)
+            menuWriteTouch(channel, true);
+        if ((reading.touched || reading.released) && !menuWriteEdited(channel))
+            presetSetPosition(channel, writeRow, (long)constrain(reading.position, 0, 1023) * PRESET_FULL / 1023);
+        if (reading.touched)
+        {
+            // the slider, an arrow and the row, e.g. "#3 → A" over "C#2 2.08"
+            char top[9];
+            snprintf(top, sizeof(top), "#%u %c %c", (unsigned)(channel + 1) % 10, LCD_ARROW, rowName(writeRow));
+            displaySliderText(channel, top, modesValueTextIn(range, presetValue(channel, writeRow)));
+        }
+        else
+            menuWriteTouch(channel, false);
         reading = TouchReading{};
     }
 
@@ -145,19 +175,6 @@ static bool updateChannel(int channel)
     {
         sequencerTouch(channel);
         menuSelect(channel);
-    }
-
-    // WRITE: a touched slider's value goes into the current row of its stage,
-    // until the encoder edits it while the slider is held
-    if (slider && sequencerWriteRow() >= 0)
-    {
-        if (reading.started || reading.touched)
-            menuWriteTouch(channel, true);
-        bool edited = menuWriteEdited(channel);
-        if ((reading.touched || reading.released) && !edited)
-            presetSetValue(channel, sequencerWriteRow(), modesValueAt(channel, reading.position));
-        if (!reading.touched)
-            menuWriteTouch(channel, false);
     }
 
     if (source == SOURCE_LOOP)
@@ -186,15 +203,7 @@ static bool updateChannel(int channel)
     {
         outputSlider(channel, reading.position, pressure, reading.touched);
         masterInput[channel].active = reading.touched;
-        if (sequencerWriteRow() >= 0)
-        {
-            // WRITE: the row and the value written, e.g. "S3 V1" over "C#2 2.08"
-            char top[9];
-            snprintf(top, sizeof(top), "S%u V%u", (unsigned)(channel + 1) % 10, (unsigned)(sequencerWriteRow() + 1) % 10);
-            displaySliderText(channel, top, modesValueText(channel, presetValue(channel, sequencerWriteRow())));
-        }
-        else
-            displaySlider(channel, reading.position, pressure, recording, modesSliderText(channel));
+        displaySlider(channel, reading.position, pressure, recording, modesSliderText(channel));
     }
     else
     {
@@ -231,13 +240,8 @@ static void updateLeds()
             flash = true;
         else if (sequencerWriteRow() >= 0)
         {
-            // step view: the current step stands out, the stage shown breathes
-            if (channel == sequencerStage())
-                brightness = 1.0f;
-            else if (channel == menuSelected())
-                brightness = STEP_VIEW_DIM + (1.0f - STEP_VIEW_DIM) * breath;
-            else
-                brightness = STEP_VIEW_DIM;
+            // step view: the current step stands out, the others are dimmed
+            brightness = channel == sequencerStage() ? 1.0f : STEP_VIEW_DIM;
         }
         else if (menuActive() && channel == menuSelected())
             brightness = breath;
@@ -246,10 +250,17 @@ static void updateLeds()
         {
             // armed recording blinks the top LEDs; a running sequencer lights its stage's
             // the current stage's top LED: while running, and always in a step view
-            bool stageMark = (sequencerRunning() || sequencerWriteRow() >= 0) && channel == sequencerStage();
-            int top = recorderArmed() ? (blinkSlow ? 1 : 0) : (stageMark ? 1 : -1);
-            bool note = modesShowsDot(channel);
             int row = sequencerWriteRow();
+            bool stageMark = (sequencerRunning() || row >= 0) && channel == sequencerStage();
+            // a step view of a running row: the stage shown (picked with the encoder)
+            // keeps its top LED lit too, dimmed while the step passes through it
+            bool shownRunning = row >= 0 && sequencerRowRunning(row) && channel == menuSelected();
+            float top = stageMark ? 1 : -1;
+            if (shownRunning)
+                top = stageMark ? MARK_PASSING : 1; // the step on the stage shown: its top LED dims
+            if (recorderArmed())
+                top = blinkSlow ? 1 : 0;
+            bool note = modesShowsDot(channel);
             if (flash)
                 setSliderLED(channel, 1023, brightness, top);
             else if (row >= 0 && menuShifting())
@@ -262,9 +273,9 @@ static void updateLeds()
             }
             else if (row >= 0)
             {
-                // WRITE: the row's value of this stage, where it lies on the slider
-                int value = presetValue(channel, row);
-                setSliderLED(channel, modesPositionOf(channel, value), brightness, top, note);
+                // WRITE: where the row's value of this stage lies in the row's range
+                bool quantized = seqSettings.rows[row].scale != 0;
+                setSliderLED(channel, presetPosition(channel, row) >> 6, brightness, top, quantized);
             }
             else if (modesRunning(channel))
                 setSliderLED(channel, modesLfoLevel(channel), brightness, top);
@@ -301,6 +312,7 @@ void loop()
 {
     // master gate: on while any slider is touched or looping with its gate on
     bool anySliderGate = false;
+    anyTouched = false;
     for (int channel = 0; channel < NUM_SENSORS; channel++)
     {
         bool gate = updateChannel(channel);
@@ -320,5 +332,6 @@ void loop()
     uint8_t buttons = buttonsRead();
     menuUpdate(buttons);
     recorderUpdate(buttons);
+    storageAutosave(!anyTouched && !buttons); // a view left open does not hold it off
     displayUpdate();
 }

@@ -80,7 +80,7 @@ static const ScaleInfo SCALES[NUM_SCALES] = {
 static const char *MODE_NAMES[NUM_MODES] = {"slide", "lfo"};
 static const char *NOTE_NAMES[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 
-static const SliderSettings DEFAULT_SETTINGS = {MODE_SLIDE, 0, 0, 0, 0, 0, LFO_SINE, 1, 0, 0, 0, 0, 0, 8 * CENTS_PER_VOLT, 0};
+static const SliderSettings DEFAULT_SETTINGS = {MODE_SLIDE, 0, 0, 0, 128, 0, LFO_SINE, 1, 0, 0, 0, 0, 0, 8 * CENTS_PER_VOLT, 0};
 
 struct Storage // as saved by earlier firmware
 {
@@ -202,6 +202,7 @@ struct Lfo
     float phase;    // 0-1
     int position;   // the slider position that sets the rate
     float depth;    // 0-1, from the pressure
+    float slid;     // 0-1, from the slider position, when it sets the depth
     float value;    // 0-1, random level for S&H
     float pressure; // recent pressure, a little behind, for the depth on release
     float earlier;
@@ -300,19 +301,29 @@ bool modesOwnsGate(int slider)
     return usesTrig(sliderSettings[slider]);
 }
 
-// tempo sync: the cycle length the slider position picks
-static int syncDivision(int slider)
+// where along the rate range the LFO is (10 bit): the slider position, or
+// FREQ when the slider sets the depth
+static int ratePosition(int slider)
 {
-    return constrain(lfo[slider].position * NUM_SYNC_DIVISIONS / 1024, 0, NUM_SYNC_DIVISIONS - 1);
+    const SliderSettings &s = sliderSettings[slider];
+    if (s.lfoDepth & LFO_DEPTH_SLIDER)
+        return s.lfoFreq * 1023 / 255;
+    return lfo[slider].position;
 }
 
-// LFO rate from the slider position and the rate range, so a new range applies at once
+// tempo sync: the cycle length the rate position picks
+static int syncDivision(int slider)
+{
+    return constrain(ratePosition(slider) * NUM_SYNC_DIVISIONS / 1024, 0, NUM_SYNC_DIVISIONS - 1);
+}
+
+// LFO rate from the rate position and the rate range, so a new range applies at once
 static float lfoRate(int slider)
 {
     if (sliderSettings[slider].lfoRate == LFO_RATE_SYNC)
         return 1.0f / (SYNC_DIVISIONS[syncDivision(slider)].beats * sequencerBeatSeconds());
     const RateRange &r = LFO_RATES[min((int)sliderSettings[slider].lfoRate, 2)];
-    return r.low * powf(r.high / r.low, constrain(lfo[slider].position, 0, 1023) / 1023.0f);
+    return r.low * powf(r.high / r.low, constrain(ratePosition(slider), 0, 1023) / 1023.0f);
 }
 
 void modesSyncRestart()
@@ -348,7 +359,8 @@ void modesLoadLegacy()
             sliderSettings[i] = DEFAULT_SETTINGS;
             for (int b = 0; b < V6_SIZE; b++)
                 ((uint8_t *)&sliderSettings[i])[b] = EEPROM.read(STORAGE_ADDRESS + sizeof(uint32_t) + i * V6_SIZE + b);
-            sliderSettings[i].slewMs = OLD_SLEW_TIMES[min((int)sliderSettings[i].legacySlew, 8)];
+            sliderSettings[i].slewMs = OLD_SLEW_TIMES[min((int)sliderSettings[i].lfoFreq, 8)]; // the glide time was here
+            sliderSettings[i].lfoFreq = DEFAULT_SETTINGS.lfoFreq;
         }
         return;
     }
@@ -376,6 +388,7 @@ void modesSetup()
         currentStep[i] = -1;
         currentSemitone[i] = -1;
         lfo[i].depth = 1.0f;
+        lfo[i].slid = 1.0f; // full depth until the slider is touched
         lfo[i].semitone = -1;
         lfo[i].lastUs = micros();
     }
@@ -460,7 +473,11 @@ int modesQuantizeCents(int scale, int root, int cents)
 
 int modesValueAt(int slider, int position)
 {
-    const SliderSettings &s = sliderSettings[slider];
+    return modesValueIn(sliderSettings[slider], position);
+}
+
+int modesValueIn(const SliderSettings &s, int position)
+{
     position = constrain(position, 0, 1023);
     if (!s.scale)
         return constrain(s.base + lroundf(position / 1023.0f * s.range), 0, MAX_CENTS);
@@ -475,7 +492,11 @@ int modesValueAt(int slider, int position)
 
 int modesPositionOf(int slider, int cents)
 {
-    const SliderSettings &s = sliderSettings[slider];
+    return modesPositionIn(sliderSettings[slider], cents);
+}
+
+int modesPositionIn(const SliderSettings &s, int cents)
+{
     if (!s.scale)
     {
         if (s.range == 0)
@@ -500,8 +521,13 @@ int modesPositionOf(int slider, int cents)
 
 const char *modesValueText(int slider, int cents)
 {
+    return modesValueTextIn(sliderSettings[slider], cents);
+}
+
+const char *modesValueTextIn(const SliderSettings &s, int cents)
+{
     static char text[9];
-    if (sliderSettings[slider].scale)
+    if (s.scale)
     {
         int semitone = constrain((int)lroundf((float)cents / SEMITONE_CENTS), 0, MAX_SEMITONE);
         char note[5];
@@ -583,15 +609,18 @@ static float lfoShape(int slider, float phase)
     }
 }
 
-// the finger (or a loop) on an LFO slider: position sets the rate, pressure
-// the depth, a landing finger can restart the cycle
+// the finger (or a loop) on an LFO slider: position sets the rate (or the
+// depth), pressure the depth, a landing finger can restart the cycle
 static void lfoInput(int slider, int position, int pressure, bool gate)
 {
     const SliderSettings &s = sliderSettings[slider];
     Lfo &l = lfo[slider];
 
     if (gate)
+    {
         l.position = position;
+        l.slid = constrain(position, 0, 1023) / 1023.0f;
+    }
 
     bool landed = gate && !lastGate[slider];
     if (landed && s.lfoGate == 0)
@@ -621,10 +650,16 @@ static void lfoInput(int slider, int position, int pressure, bool gate)
         l.depth = l.earlier;
 }
 
-// depth in use: full, or the pressure depth
+// depth in use: full, or from the slider position and/or the pressure
 static float lfoDepth(int slider)
 {
-    return sliderSettings[slider].lfoDepth ? lfo[slider].depth : 1.0f;
+    uint8_t depth = sliderSettings[slider].lfoDepth;
+    float d = 1.0f;
+    if (depth & LFO_DEPTH_SLIDER)
+        d *= lfo[slider].slid;
+    if (depth & LFO_DEPTH_PRESSURE)
+        d *= lfo[slider].depth;
+    return d;
 }
 
 bool modesGate(int slider, bool touchGate)
@@ -805,13 +840,10 @@ const char *modesSliderText(int slider)
 {
     static char text[7];
     const SliderSettings &s = sliderSettings[slider];
-    if (s.mode == MODE_LFO && s.lfoRate == LFO_RATE_SYNC)
-        snprintf(text, sizeof(text), "%s", SYNC_DIVISIONS[syncDivision(slider)].name);
+    if (s.mode == MODE_LFO && (s.lfoDepth & LFO_DEPTH_SLIDER))
+        snprintf(text, sizeof(text), "%3d%%", (int)lroundf(lfo[slider].slid * 100)); // the depth the slider sets
     else if (s.mode == MODE_LFO)
-    {
-        float rate = lfoRate(slider);
-        snprintf(text, sizeof(text), rate < 10 ? "%.2fHz" : "%.1fHz", rate);
-    }
+        return modesFreqText(slider);
     else if (s.scale && currentSemitone[slider] >= 0)
     {
         int semitone = currentSemitone[slider];
@@ -835,6 +867,19 @@ const char *scaleName(int scale)
 const char *lfoShapeName(int shape)
 {
     return LFO_SHAPE_NAMES[shape];
+}
+
+const char *modesFreqText(int slider)
+{
+    static char text[7];
+    if (sliderSettings[slider].lfoRate == LFO_RATE_SYNC)
+        snprintf(text, sizeof(text), "%s", SYNC_DIVISIONS[syncDivision(slider)].name);
+    else
+    {
+        float rate = lfoRate(slider);
+        snprintf(text, sizeof(text), rate < 10 ? "%.2fHz" : "%.1fHz", rate);
+    }
+    return text;
 }
 
 const char *lfoRateName(int rate)

@@ -14,7 +14,7 @@ struct SystemSettings
     uint8_t bright;   // percent: LED brightness, 10-100
     uint8_t trigMs;   // trigger length, 1-20 ms
     uint8_t loopTrig; // a gate held across the loop start drops briefly: 0 off, 1 on
-    uint8_t reserved;
+    uint8_t autosave; // the current slot is saved after a pause in playing: 0 off, 1 on
 };
 
 extern SystemSettings systemSettings;

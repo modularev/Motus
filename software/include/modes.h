@@ -41,6 +41,9 @@ enum LfoShape : uint8_t
 
 constexpr int NUM_LFO_RATES = 4; // slow, mid, fast, sync
 constexpr int LFO_RATE_SYNC = 3;
+constexpr uint8_t LFO_DEPTH_PRESSURE = 1; // lfoDepth bits
+constexpr uint8_t LFO_DEPTH_SLIDER = 2;
+constexpr int LFO_PHASE_STEPS = 24; // PHASE in steps of 15 degrees
 
 // Base and range are in cents of a volt (1/1200 V): a semitone is 100, an
 // octave 1200 at 1 V/octave, and 0.01 V is 12.
@@ -54,11 +57,11 @@ struct SliderSettings
     uint8_t scale;     // quantizer: 0 off, else the scale + 1
     uint8_t root;      // 0 = C .. 11 = B
     uint8_t latch;     // SLIDE: 0 the output follows the finger, 1 it is set where the finger lands
-    uint8_t legacySlew; // earlier glide time setting, only read when converting old settings
+    uint8_t lfoFreq;   // LFO, slider sets the depth: the rate, 0-255 along the RATE range (or the sync divisions); was the earlier glide time
     uint8_t slideGate; // SLIDE: 0 gate while touched, 1 gate drops briefly on every new note, 2 trigger on touch and every new note
     uint8_t lfoShape;
     uint8_t lfoRate;   // LFO: rate range the slider spans, index into the rate ranges
-    uint8_t lfoDepth;  // LFO: 0 fixed, 1 pressure sets the depth
+    uint8_t lfoDepth;  // LFO: bit 0 pressure sets the depth (else fixed), bit 1 the slider sets the depth (else the rate)
     uint8_t lfoReset;  // LFO: 0 free running, 1 restarts on touch
     uint8_t lfoGate;   // LFO: 0 gate while touched, 1 high for the first half of every cycle, 2 trigger every cycle, 3 trigger on every new note
     uint8_t lfoPhase;  // LFO: phase offset, 0-255 for 0-360 degrees
@@ -109,6 +112,12 @@ int modesPositionOf(int slider, int cents);
 // volts when quantized ("C#2 2.08"), else the volts ("   2.08V")
 const char *modesValueText(int slider, int cents);
 
+// the same for any range: QUANT, ROOT, BASE and RANGE of the settings given,
+// e.g. a sequencer row's
+int modesValueIn(const SliderSettings &range, int position);
+int modesPositionIn(const SliderSettings &range, int cents);
+const char *modesValueTextIn(const SliderSettings &range, int cents);
+
 // the nearest note (cents) of a scale (index, 0 = chromatic) from a root
 int modesQuantizeCents(int scale, int root, int cents);
 
@@ -133,5 +142,8 @@ const char *scaleName(int scale);
 const char *noteName(int semitone); // without octave
 const char *lfoShapeName(int shape);
 const char *lfoRateName(int rate);
+
+// FREQ, the rate of an LFO whose slider sets the depth: "0.50Hz" or "1/4"
+const char *modesFreqText(int slider);
 
 #endif
