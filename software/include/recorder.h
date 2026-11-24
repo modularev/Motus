@@ -34,6 +34,9 @@ enum Source
 // loop keeps playing.
 Source recorderChannel(int channel, const TouchReading &reading, bool liveOverLoop, Playback &playback);
 
+// a fresh start (a template): every loop stops, arming and a recording are cancelled
+void recorderReset();
+
 bool recorderArmed();
 bool recorderIsRecording(int channel);
 bool recorderIsLooping(int channel);

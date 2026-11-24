@@ -160,7 +160,8 @@ void presetNudge(int preset, int var, int detents, int cents)
     if (r.scale)
     {
         // quantized: on to the next note, in the direction of the turn
-        int dir = detents > 0 ? 1 : -1;
+        // a negative range runs the notes downwards along the positions
+        int dir = (detents > 0) == (r.range >= 0) ? 1 : -1;
         for (int d = 0; d < abs(detents); d++)
         {
             int from = centsAt(var, position);

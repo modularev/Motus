@@ -8,6 +8,9 @@
 
 // pressure outputs are smoothed: each new value is averaged with the previous one
 static uint16_t smoothedPressure[NUM_SENSORS];
+// values last written, so unchanged ones do not use the I2C bus again
+static int writtenPressure[NUM_SENSORS];
+static int writtenMasterPos = -1, writtenMasterForce = -1;
 
 // Output calibration: measured voltage at DAC values 0, 1365, 2730 and 4095
 // (with the DAC test build), per output. Voltages are converted to DAC values
@@ -57,6 +60,9 @@ void dacSetup()
     pinMode(MASTER_GATE_PIN, OUTPUT);
     digitalWrite(MASTER_GATE_PIN, HIGH);
 
+    for (int i = 0; i < NUM_SENSORS; i++)
+        writtenPressure[i] = -1; // unknown: the first value is written
+
     dacMux.begin();
     dacMux.closeAll();
     openDac = -1;
@@ -85,6 +91,9 @@ void setPressDAC(int channel, int value_9bit)
 {
     smoothedPressure[channel] = (smoothedPressure[channel] + (value_9bit << 3)) / 2;
     value_9bit = smoothedPressure[channel];
+    if (value_9bit == writtenPressure[channel])
+        return;
+    writtenPressure[channel] = value_9bit;
 
     if (channel < 4)
     {
@@ -125,11 +134,16 @@ void setXYPadDAC(int channel, int x_value_10bit, int y_value_10bit)
 
 void setMaster(int pos_12bit, int force_9bit)
 {
-    selectDac(5);
-    {
-        dac.setChannelValue(MCP4728_CHANNEL_A, constrain(pos_12bit, 0, 4095), MCP4728_VREF_INTERNAL);
-        dac.setChannelValue(MCP4728_CHANNEL_B, force_9bit << 3, MCP4728_VREF_INTERNAL);
-    }
+    pos_12bit = constrain(pos_12bit, 0, 4095);
+    int force = force_9bit << 3;
+    if (pos_12bit != writtenMasterPos || force != writtenMasterForce)
+        selectDac(5);
+    if (pos_12bit != writtenMasterPos)
+        dac.setChannelValue(MCP4728_CHANNEL_A, pos_12bit, MCP4728_VREF_INTERNAL);
+    if (force != writtenMasterForce)
+        dac.setChannelValue(MCP4728_CHANNEL_B, force, MCP4728_VREF_INTERNAL);
+    writtenMasterPos = pos_12bit;
+    writtenMasterForce = force;
 }
 
 void setGate(int channel, bool touchState)

@@ -279,6 +279,8 @@ static void updateLeds()
             }
             else if (modesRunning(channel))
                 setSliderLED(channel, modesLfoLevel(channel), brightness, top);
+            else if (modesShowsOutput(channel))
+                setSliderLED(channel, modesOutputLevel(channel), brightness, top, note); // CTRL's delayed output
             else if (note)
                 setSliderLED(channel, modesNotePosition(channel), brightness, top, true);
             else
@@ -291,13 +293,26 @@ static void updateLeds()
 
 static void updateMaster()
 {
+    // after a reset of the sliders (a template), their LEDs and the master start from the bottom too
+    static uint32_t seenResets = 0;
+    if (modesResets() != seenResets)
+    {
+        seenResets = modesResets();
+        for (int i = 0; i < NUM_SLIDERS; i++)
+        {
+            ledX[i] = 0;
+            masterInput[i] = {false, 0, 0};
+        }
+        setMaster(0, 0);
+    }
+
     int count = 0;
     long code = 0;
     long pressure = 0;
     for (int i = 0; i < NUM_SLIDERS; i++)
     {
-        // running LFOs join the mix too
-        bool running = modesRunning(i);
+        // running LFOs and delayed sliders join the mix too
+        bool running = modesMoving(i);
         if (!masterInput[i].active && !running)
             continue;
         count++;

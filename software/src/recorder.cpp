@@ -77,6 +77,15 @@ static void stopAllLoops()
     }
 }
 
+void recorderReset()
+{
+    stopAllLoops();
+    if (recording >= 0)
+        state[recording] = LIVE;
+    recording = -1;
+    armed = false;
+}
+
 static void startRecording(int channel)
 {
     armed = false;

@@ -222,6 +222,16 @@ void sequencerUpdate()
     // a slider clock: measure the time between its rising gates, and step on each
     int clockSlider = seqSettings.clock - 1;
     bool rose = false;
+    static int lastClockSlider = -1;
+    if (clockSlider != lastClockSlider)
+    {
+        // another clock: its earlier gates are no step, and its tempo is measured afresh
+        lastClockSlider = clockSlider;
+        if (clockSlider >= 0 && clockSlider < NUM_SLIDERS)
+            seenRises = modesGateRises(clockSlider);
+        lastRiseMs = 0;
+        measuredStepSeconds = 0;
+    }
     if (clockSlider >= 0 && clockSlider < NUM_SLIDERS)
     {
         uint32_t rises = modesGateRises(clockSlider);
@@ -245,6 +255,8 @@ void sequencerUpdate()
 
     if (clockSlider >= 0)
     {
+        // the internal clock stays ready, so switching to it steps a step's time later
+        nextStepUs = micros() + (uint32_t)(stepSeconds() * 1e6f);
         if (rose)
             advance((uint32_t)(measuredStepSeconds * 1e6f));
         return;

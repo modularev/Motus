@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motus Touch Controller Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky table of contents on the left, one reading column. Colours from the panel: black, gold, the lime LCD. */
+:root {
+  --bg: #0a0a09;
+  --panel: #141412;
+  --panel-2: #1c1b18;
+  --line: #2c2a24;
+  --fg: #ece6d6;
+  --muted: #a39d8c;
+  --gold: #c9a865;
+  --gold-dim: #8f7a4c;
+  --lcd: #c5d64a;
+  --lcd-ink: #1f2a12;
+  --finger: #e0532f;
+  --display: "Chakra Petch", "IBM Plex Sans", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { background: var(--bg); color: var(--fg); font: 400 16px/1.6 var(--body); margin: 0; padding-inline: 16px; }
+a { color: var(--gold); text-underline-offset: 3px; }
+a:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 3px; }
+
+.wrap { max-width: 1160px; margin: 0 auto; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 56px; padding-block: 48px 96px; }
+nav.toc { position: sticky; top: 24px; align-self: start; }
+nav.toc p { font: 600 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; border-left: 1px solid var(--line); }
+nav.toc a { display: block; padding: 5px 0 5px 14px; margin-left: -1px; border-left: 1px solid transparent; color: var(--muted); text-decoration: none; font-size: 14px; }
+nav.toc a:hover { color: var(--fg); border-left-color: var(--gold); }
+nav.toc li.sub a { padding-left: 26px; font-size: 13px; }
+
+main { min-width: 0; max-width: 800px; }
+
+.hero { display: grid; gap: 28px; padding-bottom: 40px; border-bottom: 1px solid var(--line); }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--gold-dim); }
+h1 { font: 700 clamp(36px, 6vw, 56px)/1.02 var(--display); letter-spacing: -.01em; margin: 10px 0 0; text-wrap: balance; }
+h1 span { color: var(--gold); }
+.lede { font-size: 18px; color: var(--muted); max-width: 62ch; margin: 0; }
+.lede strong { color: var(--fg); font-weight: 500; }
+.hero img { display: block; width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); }
+
+section { padding-top: 56px; display: grid; gap: 18px; }
+h2 { font: 600 28px/1.15 var(--display); margin: 0; text-wrap: balance; display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
+h2 small { font: 500 12px/1 var(--mono); color: var(--gold-dim); letter-spacing: .1em; text-transform: uppercase; }
+h3 { font: 600 20px/1.2 var(--display); margin: 16px 0 0; }
+p { margin: 0; max-width: 68ch; }
+ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 68ch; }
+.note { border-left: 2px solid var(--gold-dim); padding: 2px 0 2px 14px; color: var(--muted); font-size: 15px; max-width: 68ch; }
+.note b { color: var(--fg); font-weight: 600; }
+.warn { border-left-color: var(--finger); color: var(--fg); }
+
+kbd { font: 600 12px/1 var(--mono); letter-spacing: .06em; color: var(--bg); background: var(--gold); border-radius: 4px; padding: 3px 6px; white-space: nowrap; box-shadow: inset 0 -2px 0 rgba(0,0,0,.25); }
+.v { font-family: var(--mono); font-size: .92em; color: var(--lcd); white-space: nowrap; }
+.j { font-family: var(--mono); font-size: .92em; color: var(--gold); white-space: nowrap; font-style: italic; }
+
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font: 600 11px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); background: var(--panel-2); }
+td:first-child { white-space: nowrap; font-weight: 500; }
+td.mode { font: 500 12px/1.9 var(--mono); color: var(--gold-dim); white-space: nowrap; }
+table.wrap1 td:first-child { white-space: normal; }
+
+/* the 8x2 character LCD */
+.screens { display: flex; flex-wrap: wrap; gap: 18px 16px; }
+.lcd { margin: 0; display: grid; gap: 6px; justify-items: center; }
+.lcd .bez { background: #2b2b29; border-radius: 6px; padding: 6px; }
+.lcd .glass { background: var(--lcd); border-radius: 3px; padding: 6px 8px; display: grid; grid-template-columns: repeat(8, 15px); grid-auto-rows: 22px; box-shadow: inset 0 0 12px rgba(0,0,0,.18); }
+.lcd .glass span { font: 500 19px/22px var(--mono); color: var(--lcd-ink); text-align: center; white-space: pre; overflow: hidden; }
+.lcd .glass svg { width: 15px; height: 22px; display: block; }
+.lcd figcaption { font-size: 13px; color: var(--muted); }
+
+/* annotated panel crops */
+.figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+figure.panel { margin: 0; display: grid; gap: 10px; align-content: start; }
+figure.panel svg { display: block; width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); background: #000; }
+figure.panel figcaption { font-size: 14px; color: var(--muted); }
+figure.panel.narrow { max-width: 460px; }
+
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 8px; align-content: start; }
+.card h3 { margin: 0; font-size: 18px; color: var(--gold); }
+.card p { font-size: 14.5px; color: var(--muted); }
+
+footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+
+@media (max-width: 900px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); gap: 32px; padding-block: 32px 72px; }
+  nav.toc { position: static; }
+  nav.toc ol { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); border-left: 0; }
+  nav.toc a, nav.toc li.sub a { border-left: 0; padding-left: 0; }
+  .cards { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) { th, td { padding: 8px 10px; } }
+@media print {
+  body { background: #fff; color: #000; }
+  nav.toc { display: none; }
+  .wrap { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="toc" aria-label="Contents">
+    <p>Contents</p>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#start">Getting started</a></li>
+      <li><a href="#playing">Playing</a></li>
+      <li><a href="#menus">Menus</a></li>
+      <li><a href="#slider">Slider settings</a></li>
+      <li><a href="#sequencer">Sequencer</a></li>
+      <li class="sub"><a href="#stepview">Step views</a></li>
+      <li class="sub"><a href="#rowsettings">Row settings</a></li>
+      <li class="sub"><a href="#seqsettings">Sequencer settings</a></li>
+      <li><a href="#recording">Recording</a></li>
+      <li><a href="#saving">Saving &amp; loading</a></li>
+      <li><a href="#system">System settings</a></li>
+      <li><a href="#quickref">Quick reference</a></li>
+      <li><a href="#specs">Specifications</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div>
+        <div class="eyebrow">Touch controller · user manual</div>
+        <h1>Motus: voltages from <span>fingers</span></h1>
+      </div>
+      <p class="lede">Eight touch sliders, two XY pads, a <strong>four-row step sequencer</strong>, LFOs, quantizers and
+        <strong>loop recording</strong>, played by finger and set up on an 8×2 character display.</p>
+      <img src="panel.png" alt="The Motus front panel: XY pads on the left, eight sliders with force, position and gate jacks, and on the right the master and sequencer jacks, SET pads, display, FINE, HOLD, LOAD, SAVE and the encoder" width="2481" height="1518">
+    </header>
+
+    <!-- ============================================================ overview -->
+    <section id="overview">
+      <h2>Overview</h2>
+      <p>Motus turns finger position and pressure into control voltages and gates for a modular system. Every touch
+        surface reads position and pressure; a finger can rest, slide, press harder or jump with a second finger. All
+        voltage outputs span about 0–8.2 V and are calibrated, so notes are in tune at 1 V/octave.</p>
+      <h3>Outputs</h3>
+      <div class="tbl"><table class="wrap1">
+        <thead><tr><th>Section</th><th>Jacks</th><th>What comes out</th></tr></thead>
+        <tbody>
+          <tr><td>Sliders 1–8</td><td><span class="j">position</span> <span class="j">force</span> <span class="j">gate</span></td><td>the slider's output (a voltage, a note or an LFO), the finger's pressure, and a gate or trigger. The output holds its value after you lift.</td></tr>
+          <tr><td>XY pads 1–2</td><td><span class="j">X1 Y1 Z1</span><br><span class="j">X2 Y2 Z2</span></td><td>the finger's position on the pad, and its pressure (Z).</td></tr>
+          <tr><td>Master</td><td><span class="j">m.pos</span> <span class="j">m.force</span> <span class="j">m.gate</span></td><td>the average of all sliders that are touched, looping or running an LFO, so it always stays in range; it holds when none are. The gate is on while any slider gate is on, or gives the sequencer's step trigger while any row runs.</td></tr>
+          <tr><td>Sequencer</td><td><span class="j">var 1–4</span></td><td>the four rows A–D of the step sequencer.</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Controls</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Control</th><th>Main use</th></tr></thead>
+        <tbody>
+          <tr><td><kbd>SET 1–4</kbd></td><td>tap: a settings page (<kbd>SET 1</kbd> PLAY, <kbd>SET 2</kbd> OUT, <kbd>SET 3</kbd> CTRL, <kbd>SET 4</kbd> SEQ and SYS) · double tap: start or stop sequencer row A–D · hold: the row's step view</td></tr>
+          <tr><td><kbd>FINE</kbd></td><td>tap: toggle fine encoder steps (± on the display), until the menu closes · double tap: start or stop all rows · hold and turn: change a value</td></tr>
+          <tr><td><kbd>HOLD</kbd></td><td>record and loop slider or pad movements</td></tr>
+          <tr><td><kbd>SAVE</kbd> <kbd>LOAD</kbd></td><td>four patch slots, and templates for a fresh start</td></tr>
+          <tr><td>Encoder</td><td>scroll, step the sequence by hand, edit values</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">On the screen, the sequencer rows are called <b>A–D</b> (<kbd>SET 1</kbd> and <span class="j">var 1</span> are row A) and the sliders <b>#1–#8</b>, by their number on the panel.</p>
+    </section>
+
+    <section id="start">
+      <h2>Getting started</h2>
+      <p class="note warn"><b>Keep your fingers off the touch surfaces while switching on.</b> Motus measures the
+        untouched level of every electrode at start-up. It then shows <span class="v">MOTUS</span> and the slot it loaded,
+        and opens the idle screen.</p>
+      <p>For a quick start, load a template: tap <kbd>LOAD</kbd>, turn the encoder past the four slots to
+        <span class="v">INIT?</span>, pick <span class="v">faders</span>, <span class="v">lfos</span>,
+        <span class="v">keys</span> or <span class="v">split</span> and tap <kbd>LOAD</kbd> again. Changes are saved into
+        the current slot by themselves (see <a href="#saving">Saving and loading</a>).</p>
+    </section>
+
+    <!-- ============================================================ playing -->
+    <section id="playing">
+      <h2>Playing</h2>
+      <h3>Sliders</h3>
+      <p>Each slider follows your finger smoothly from bottom to top. Slow movements are smoothed, fast ones stay fast,
+        and a resting finger can wobble a little without moving the output. When you lift, the value from just before
+        lifting is kept, so the output does not drift as the finger leaves. Pressing harder raises
+        <span class="j">force</span>; the position is compensated, so it stays nearly where it is.</p>
+      <p>The LEDs under a slider show its value as a bar, as a dot at the current note when it is quantized, or as the
+        moving waveform when it runs an LFO.</p>
+      <h3>Two fingers</h3>
+      <p>Put a second finger on a slider or pad and the value jumps to it; lift it and the value jumps back. Lift the
+        first finger instead and the value stays with the second, without the touch ending. Use it for square-wave
+        modulation or to jump to a new value mid-gesture. The fingers need about one electrode of space between them.</p>
+      <h3>XY pads</h3>
+      <p>The pads output X, Y and pressure (Z). Their LEDs glow around the finger. Pads can be recorded and looped like sliders.</p>
+      <figure class="panel narrow" data-fig="play">
+        <figcaption>Slide a slider, jump with a second finger (lift it to jump back), and move or press on a pad.</figcaption>
+      </figure>
+      <h3>The display while playing</h3>
+      <p>Touching a control shows its value: a voltage, a note, an LFO rate or depth on a slider, X and Y on a pad.
+        Without a touch, the idle screen shows the sequencer.</p>
+      <div class="screens">
+        <figure class="lcd" data-top="   2.37V" data-bot="████▎   " data-cap="slider"></figure>
+        <figure class="lcd" data-top="     C#2" data-bot="██████▊ " data-cap="quantized slider"></figure>
+        <figure class="lcd" data-top="P1 X 512" data-bot="   Y 300" data-cap="XY pad"></figure>
+        <figure class="lcd" data-top="RUN 120●" data-bot="{8,3} {3,2} {5,0} {8,8}*" data-cap="idle, running"></figure>
+        <figure class="lcd" data-top="STOP 120" data-bot="Slot 2 *" data-cap="idle, stopped"></figure>
+      </div>
+      <p class="note">On the idle screen, <span class="v">RUN</span> or <span class="v">STOP</span> is followed by the
+        tempo, or by the slider that clocks the sequencer (<span class="v">#3</span>). While running, the second line has
+        a tube per row A–D: one pixel row per step, as tall as the row's length, and filled up to its current step; a
+        stopped row's tube stays empty. When everything is stopped, it shows the current slot. A dot means recording,
+        <span class="v">*</span> means unsaved changes.</p>
+    </section>
+
+    <!-- ============================================================ menus -->
+    <section id="menus">
+      <h2>Menus</h2>
+      <p>Everything is set up with the four <kbd>SET</kbd> pads, <kbd>FINE</kbd> and the encoder. A tap opens a settings
+        page, a double tap starts or stops a sequencer row, and holding opens a row's step view (see
+        <a href="#sequencer">Sequencer</a>).</p>
+      <div class="figs">
+        <figure class="panel" data-fig="menu1"><figcaption>Touch the slider to edit, tap SET 1 for how it plays (SET 2: its range, SET 3: CTRL), scroll with the encoder, and hold FINE while turning to change the value.</figcaption></figure>
+        <figure class="panel" data-fig="menu2"><figcaption>On PLAY, OUT or CTRL, hold that page's SET pad and turn right away to choose a slider without touching it; its LEDs breathe.</figcaption></figure>
+      </div>
+      <div class="tbl"><table class="wrap1">
+        <thead><tr><th>Gesture</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Tap <kbd>SET 1–4</kbd></td><td>open the PLAY, OUT, CTRL or SEQ page (SEQ ends with the SYS settings); tap it again to close it</td></tr>
+          <tr><td>Tap another <kbd>SET</kbd> pad</td><td>with a page open: switch to that page · in a step view or a row's settings: close it, back to the idle screen</td></tr>
+          <tr><td>Double tap <kbd>SET 1–4</kbd></td><td>start or stop row A–D, from anywhere; the first tap acts as a tap at once, so its page opens (or a view closes) as well</td></tr>
+          <tr><td>Hold <kbd>SET 1–4</kbd> (0.5 s)</td><td>open the step view of row A–D; held there again: the row's settings</td></tr>
+          <tr><td>In settings: encoder</td><td>scroll through the settings</td></tr>
+          <tr><td>In settings: hold <kbd>FINE</kbd> and turn</td><td>change the value</td></tr>
+          <tr><td>Tap <kbd>FINE</kbd></td><td>toggle fine steps for exact values (± on the display); they end when the menu closes</td></tr>
+          <tr><td>Double tap <kbd>FINE</kbd></td><td>start or stop all rows, from anywhere</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">A <kbd>SET</kbd> pad held while the encoder turns or a slider is touched is a modifier, so letting
+        go is neither a tap nor a hold. Touching a slider selects which slider PLAY, OUT and CTRL edit, and it keeps
+        playing as usual; while a <kbd>SET</kbd> pad is held, a touch only selects and leaves the outputs unchanged.
+        While a settings page is open, the selected slider's LEDs breathe. Settings pages close after 5 seconds without
+        input; a step view stays open until you tap a <kbd>SET</kbd> pad.</p>
+      <div class="screens">
+        <figure class="lcd" data-top="#3 QUANT" data-bot="   major" data-cap="OUT page"></figure>
+        <figure class="lcd" data-top="#3±BASE" data-bot="C2  2.00" data-cap="with FINE on"></figure>
+        <figure class="lcd" data-top="BPM" data-bot="     120" data-cap="SEQ page"></figure>
+        <figure class="lcd" data-top="B  SPEED" data-bot="      x2" data-cap="row settings"></figure>
+      </div>
+    </section>
+
+    <!-- ============================================================ slider settings -->
+    <section id="slider">
+      <h2>Slider settings <small>tap SET 1, 2, 3</small></h2>
+      <p>Every slider works in one of two modes, chosen with LFO at the top of its PLAY page:</p>
+      <div class="cards">
+        <div class="card"><h3>LFO off · SLIDE</h3><p>The finger sets the output. Without a quantizer it works like a fader; with one it plays the notes of a scale, like a keyboard strip, and sweeping it plays an arpeggio.</p></div>
+        <div class="card"><h3>LFO on</h3><p>The output runs an LFO that keeps running after you lift. The finger sets its rate, or with SETS set to depth, how far it swings.</p></div>
+      </div>
+      <p>A slider's settings sit on three pages: <b>PLAY</b> (<kbd>SET 1</kbd>) how the finger plays it, <b>OUT</b>
+        (<kbd>SET 2</kbd>) its range and quantizer, and <b>CTRL</b> (<kbd>SET 3</kbd>) what happens to the output
+        afterwards. Both modes share the same language for their range: <b>BASE</b> is where the output starts (the bottom of the
+        slider, or the LFO's low point) and <b>RANGE</b> how far it goes. A negative RANGE inverts the slider or the LFO.</p>
+      <h3>PLAY <small>tap SET 1</small></h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Setting</th><th>Mode</th><th>Values</th></tr></thead>
+        <tbody>
+          <tr><td>LFO</td><td class="mode">both</td><td>off (SLIDE) or on</td></tr>
+          <tr><td>PLAY</td><td class="mode">SLIDE</td><td>slide: the output follows the finger · touch: set where the finger lands; a second finger sets a new value</td></tr>
+          <tr><td>GATE</td><td class="mode">SLIDE</td><td>gate while touched · retrig: a short drop on every new note · trig: a trigger on touch and every new note</td></tr>
+          <tr><td>SHAPE</td><td class="mode">LFO</td><td>sine and triangle start halfway and rise, ramp rises from BASE, saw falls to it, square starts high, S&amp;H holds a new random level every cycle</td></tr>
+          <tr><td>SETS</td><td class="mode">LFO</td><td>what the slider sets: rate · depth: from none at the bottom to the full BASE–RANGE swing at the top (the screen shows it in %), and FREQ sets the rate</td></tr>
+          <tr><td>RATE</td><td class="mode">LFO</td><td>slow 0.02–1 Hz, mid 0.2–5 Hz, fast 1–25 Hz along the slider; or sync: 4 bars … 1/32 at the sequencer tempo, restarting in phase when the sequencer starts</td></tr>
+          <tr><td>FREQ</td><td class="mode">LFO</td><td>with SETS depth: the rate within the RATE range, or the sync division</td></tr>
+          <tr><td>PHASE</td><td class="mode">LFO</td><td>0–345° in 15° steps: an offset of the cycle; the gate, triggers and LEDs follow it</td></tr>
+          <tr><td>DEPTH</td><td class="mode">LFO</td><td>fixed, or set by pressure (and held when you lift); with SETS depth, on top of the slider's depth</td></tr>
+          <tr><td>RESET</td><td class="mode">LFO</td><td>free running, or restart the cycle on touch</td></tr>
+          <tr><td>GATE</td><td class="mode">LFO</td><td>while touched · cycle: high for the first half of every cycle (a clock) · trig: at every cycle start · note: on every new quantized note</td></tr>
+        </tbody>
+      </table></div>
+      <h3>OUT <small>tap SET 2</small></h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Setting</th><th>Values</th></tr></thead>
+        <tbody>
+          <tr><td>QUANT</td><td>off, or a scale at 1 V/octave: chromatic, major, minor, major and minor pentatonic, dorian, harmonic minor, blues, whole tone</td></tr>
+          <tr><td>ROOT</td><td>the key of the scale</td></tr>
+          <tr><td>BASE</td><td>the start of the range in volts, with the note name when quantized</td></tr>
+          <tr><td>RANGE</td><td>the size of the range: volts, or semitones when quantized (<span class="v">24 st</span> = two octaves); negative inverts</td></tr>
+        </tbody>
+      </table></div>
+      <h3>CTRL <small>tap SET 3</small></h3>
+      <p>A CV processor after the mode, after the CONTROL modulator of the GRM Ateliers, in both modes: the output
+        (the finger's value, or the LFO) runs through a delay line with feedback, then a slew. Only the position output
+        is processed; gate and force stay live. With DELAY and SLEW off the output passes straight through.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Setting</th><th>Values</th></tr></thead>
+        <tbody>
+          <tr><td>SLEW</td><td>a glide between values, off to 10 s; it keeps gliding after you lift. On an LFO it rounds off square and S&amp;H steps (smooth random)</td></tr>
+          <tr><td>SLANT</td><td>−100 … +100 %: rise against fall. Positive: slower rises (up to twice SLEW), faster falls (instant at +100 %); negative the other way round</td></tr>
+          <tr><td>DELAY</td><td>off to 8 s: the output repeats the input this much later</td></tr>
+          <tr><td>LOOP</td><td>0–100 %: how much of the delayed output is fed back; low values give fading echoes, 100 % loops the last DELAY endlessly</td></tr>
+          <tr><td>FREEZE</td><td>off · lift: while untouched, the last DELAY loops (play a gesture, let go, it repeats until the next touch) · touch: it loops while touched</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">A quantized slider is quantized again after the line, so echoes and loops stay in the scale. A slider
+        with a DELAY joins the master outputs like an LFO, and its LEDs show the output rather than the finger.</p>
+      <p class="note"><b>Steps when editing:</b> BASE and RANGE move by octaves when quantized (semitones with FINE on),
+        otherwise by 1 V (0.1 V with FINE on). Small steps go four times further when you turn fast. Changes reach a held
+        output at once.</p>
+      <p class="note"><b>Gates and triggers:</b> triggers are short pulses (TRIG LEN in the SYS settings, 2 ms by default), at
+        least 10 ms apart, so one touch never fires twice.</p>
+    </section>
+
+    <!-- ============================================================ sequencer -->
+    <section id="sequencer">
+      <h2>Sequencer</h2>
+      <p>A step sequencer in the spirit of the Serge TKB. The eight sliders are eight stages, and every stage holds a
+        value for each of the four rows A–D, which come out on <span class="j">var 1</span> to <span class="j">var 4</span>.
+        Every row has its own length, start, direction, speed and range, so rows run against each other while all of
+        them follow the same clock. While any row runs, <span class="j">m.gate</span> gives a trigger on every clock step.</p>
+      <p><b>Start and stop</b> a row with a double tap on its <kbd>SET</kbd> pad, from anywhere; it starts on its first
+        stage and joins the running rows on their next step. A double tap on <kbd>FINE</kbd> starts all rows together,
+        or stops them all. On the idle screen, the encoder steps the stopped rows by hand.</p>
+
+      <h3 id="stepview">Step views</h3>
+      <p>Hold <kbd>SET 1</kbd> to <kbd>SET 4</kbd> to open the step view of row A to D. The sliders' LEDs then show that
+        row: each stage's value where it lies in the row's range. The current step has its top LED lit and shows at full
+        brightness, the rest are dimmed. A step view stays open until you tap a <kbd>SET</kbd> pad.</p>
+      <div class="tbl"><table class="wrap1">
+        <thead><tr><th>In a step view</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Touch a slider</td><td>store where you touched into the row at that stage. Only the row changes: the slider's own outputs, its loop and the running sequence stay as they are.</td></tr>
+          <tr><td>Hold a slider and turn</td><td>fine-tune that stage; the finger stops writing for the rest of that touch</td></tr>
+          <tr><td>Encoder</td><td>row stopped: step by hand · running: pick the stage shown; its top LED stays lit and dims while the step passes through</td></tr>
+          <tr><td>Hold <kbd>FINE</kbd> and turn</td><td>edit the stage on the display: a note when quantized, else a semitone (0.01 V with FINE on)</td></tr>
+          <tr><td>Hold the row's pad and turn</td><td>SHIFT: move the row's window (start and end together), wrapping past 8; with <kbd>FINE</kbd> held too: LEN. The stages inside the window light up.</td></tr>
+          <tr><td>Hold the row's pad</td><td>the row's settings (below); hold again to go back</td></tr>
+          <tr><td>Hold another row's pad</td><td>switch to that row's view</td></tr>
+          <tr><td>Double tap a <kbd>SET</kbd> pad</td><td>start or stop that row</td></tr>
+          <tr><td>Tap a <kbd>SET</kbd> pad</td><td>close the view</td></tr>
+        </tbody>
+      </table></div>
+      <div class="figs">
+        <figure class="panel" data-fig="seq1"><figcaption>Hold SET 2 for the step view of row B, then touch a slider to write into that stage.</figcaption></figure>
+        <figure class="panel" data-fig="seq2"><figcaption>In the step view, hold SET 2 again for the row's settings; scroll with the encoder, hold FINE and turn to change.</figcaption></figure>
+      </div>
+      <div class="screens">
+        <figure class="lcd" data-top="B  fwd ±" data-bot="C#2 2.08" data-cap="step view"></figure>
+        <figure class="lcd" data-top="#6 → B" data-bot="C#2 2.08" data-cap="writing"></figure>
+        <figure class="lcd" data-top="B SHIFT" data-bot="from   3" data-cap="pad held + turn"></figure>
+        <figure class="lcd" data-top="B RUN" data-bot="" data-cap="double tap SET 2"></figure>
+      </div>
+
+      <h3 id="rowsettings">Row settings</h3>
+      <p>Every stage holds a position within its row's range, like a slider position: touching a slider stores where you
+        touched it, and the row's BASE, RANGE and QUANT turn that into the output. So these settings reshape the whole
+        row at once, while it plays: turn BASE to transpose a melody, RANGE to widen it or a scale to change its notes.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Setting</th><th>Values</th></tr></thead>
+        <tbody>
+          <tr><td>DIR</td><td>forward, backward, pendulum, random</td></tr>
+          <tr><td>SHIFT</td><td>1–8: the stage the row starts on; it runs its length from there, past 8 back to 1</td></tr>
+          <tr><td>LEN</td><td>1–8 stages</td></tr>
+          <tr><td>SPEED</td><td>/4, /3, /2, x1, x2, x3, x4: steps per clock step. A slow row steps on every 2nd to 4th clock step, a fast one on the clock step and evenly in between; they stay in line with the other rows.</td></tr>
+          <tr><td>QUANT</td><td>off, or a scale: the row plays the scale's notes within its range</td></tr>
+          <tr><td>ROOT</td><td>the key of that scale</td></tr>
+          <tr><td>BASE</td><td>the bottom of the row's range, in volts (with the note name when quantized)</td></tr>
+          <tr><td>RANGE</td><td>from BASE to the top: volts, or semitones when quantized; negative inverts</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">While DIR, SHIFT or LEN is shown, the LEDs show the row's window. The settings close after 5 seconds
+        without input, back to the step view.</p>
+
+      <h3 id="seqsettings">Sequencer settings <span class="j" style="font-size:14px">tap SET 4</span></h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Setting</th><th>Values</th></tr></thead>
+        <tbody>
+          <tr><td>RUN</td><td>stop or run all rows; every row starts on its first stage</td></tr>
+          <tr><td>CLOCK</td><td>int: the internal tempo · #1–#8: a step on every rising gate of that slider. An LFO slider with a cycle gate becomes a clock you play by finger, a slider with triggers a tap clock, a recorded loop a rhythm.</td></tr>
+          <tr><td>BPM</td><td>20–300</td></tr>
+          <tr><td>DIV</td><td>what one step is: 1/1, 1/2, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32. With a slider clock, one pulse is one step and the tempo for synced LFOs and fast rows is measured from it.</td></tr>
+          <tr><td>TOUCH</td><td>jump: a touch outside the step views makes every row start at that slider's stage from then on · ignore: play the sliders freely</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <!-- ============================================================ recording -->
+    <section id="recording">
+      <h2>Recording</h2>
+      <p>Any slider or pad can record a movement and loop it, up to 20 seconds each, all at the same time. A slider
+        records position, force and gate, a pad X, Y and Z, including two-finger jumps, lifts and pauses, so rhythms loop too.</p>
+      <div class="tbl"><table class="wrap1">
+        <thead><tr><th>Action</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Tap <kbd>HOLD</kbd></td><td>arm recording: a blinking dot on the display, the top LEDs of the sliders blink. Tap again to disarm.</td></tr>
+          <tr><td>Touch a control while armed</td><td>recording starts; its LEDs blink and the dot stays lit</td></tr>
+          <tr><td>Tap <kbd>HOLD</kbd> while recording</td><td>the recording loops; the LEDs flash at every loop start</td></tr>
+          <tr><td>Hold <kbd>HOLD</kbd> (not armed) and touch a control</td><td>record it for as long as HOLD is held; letting go loops it</td></tr>
+          <tr><td>Armed: hold <kbd>HOLD</kbd> and touch a loop</td><td>stop that loop; the touch itself plays nothing</td></tr>
+          <tr><td>Armed: keep holding <kbd>HOLD</kbd></td><td>after 0.8 s a bar fills over 1.5 s, then all loops stop; letting go earlier cancels</td></tr>
+        </tbody>
+      </table></div>
+      <div class="figs">
+        <figure class="panel" data-fig="rec1"><figcaption>Tap HOLD to arm, play a slider, and tap HOLD again to loop what you played.</figcaption></figure>
+        <figure class="panel" data-fig="rec2"><figcaption>Or hold HOLD while you play: the slider records for as long as HOLD is held, and loops when you let go.</figcaption></figure>
+      </div>
+      <p class="note">Touching a looping control plays live over it while you touch. With a menu open, a touch only
+        selects the slider and its loop keeps playing, so you can change its settings while it loops. A gate held across
+        the loop start drops briefly to retrigger envelopes (LOOP TRG in the SYS settings). <b>Recordings are not kept over
+        power-off.</b></p>
+    </section>
+
+    <!-- ============================================================ saving -->
+    <section id="saving">
+      <h2>Saving and loading</h2>
+      <p>Motus keeps four patch slots. A slot holds every slider's settings, the sequencer's stage values and its
+        settings, including every row's. The SYS settings are global and saved with every save. The unit starts with the
+        slot saved or loaded last.</p>
+      <p><b>Autosave</b> (off by default, switch it on in the SYS settings): after 10 seconds without touching anything, changes are saved into the current slot by
+        themselves, and the <span class="v">*</span> disappears. After loading a
+        template, autosave waits until you SAVE or LOAD yourself, so a template never overwrites your slot.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Action</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Tap <kbd>SAVE</kbd></td><td><span class="v">SAVE 2?</span>: turn to pick a slot (<span class="v">replace</span>, <span class="v">empty</span> or <span class="v">current</span>), tap SAVE again to store</td></tr>
+          <tr><td>Tap <kbd>LOAD</kbd></td><td><span class="v">LOAD 2?</span>: turn to pick a slot, tap LOAD again to load it</td></tr>
+          <tr><td>Cancel</td><td>a SET or FINE pad, or 5 s without input</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Templates</h3>
+      <p>After the four slots, LOAD offers starting points (<span class="v">INIT?</span>). A template replaces all slider
+        settings, clears the sequencer and its values, and starts every slider from the bottom (a fader at its BASE, LFOs
+        from the start of their cycle); your slots are untouched until you save over one.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Template</th><th>Sliders</th></tr></thead>
+        <tbody>
+          <tr><td><span class="v">faders</span></td><td>8 plain faders, 0–8 V</td></tr>
+          <tr><td><span class="v">lfos</span></td><td>8 sine LFOs with clock gates, their phases 45° apart</td></tr>
+          <tr><td><span class="v">keys</span></td><td>8 quantized keyboards, C major over two octaves from C2; the sequencer rows play the same notes</td></tr>
+          <tr><td><span class="v">split</span></td><td>sliders 1–4 as keys, 5–8 as LFOs 90° apart</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <!-- ============================================================ system -->
+    <section id="system">
+      <h2>System settings <small>tap SET 4, after the sequencer's</small></h2>
+      <div class="tbl"><table>
+        <thead><tr><th>Setting</th><th>Values</th></tr></thead>
+        <tbody>
+          <tr><td>SMOOTH</td><td>1 (light) to 10 (heavy): smoothing of slow finger movement; fast moves stay fast</td></tr>
+          <tr><td>DEADBAND</td><td>0–20: how much a resting finger can wobble without moving the output</td></tr>
+          <tr><td>PRESSURE</td><td>50–200 %: how hard counts as a firm press, for force and Z</td></tr>
+          <tr><td>TOUCH</td><td>50–200 %: touch sensitivity; higher reacts to lighter touches</td></tr>
+          <tr><td>BRIGHT</td><td>10–100 %: LED brightness</td></tr>
+          <tr><td>TRIG LEN</td><td>1–20 ms: the length of triggers</td></tr>
+          <tr><td>LOOP TRG</td><td>on or off: a gate held across a loop start drops briefly</td></tr>
+          <tr><td>AUTOSAVE</td><td>off (default) or on: save changes into the current slot after 10 s untouched</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <!-- ============================================================ quick reference -->
+    <section id="quickref">
+      <h2>Quick reference</h2>
+      <div class="tbl"><table>
+        <thead><tr><th>Gesture</th><th>Where</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Tap <kbd>SET 1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> / <kbd>4</kbd></td><td class="mode">anywhere</td><td>PLAY, OUT, CTRL, SEQ + SYS page (tap again: close)</td></tr>
+          <tr><td>Tap a <kbd>SET</kbd> pad</td><td class="mode">step view, row settings</td><td>close, back to the idle screen</td></tr>
+          <tr><td>Double tap <kbd>SET 1–4</kbd></td><td class="mode">anywhere</td><td>start or stop row A–D</td></tr>
+          <tr><td>Hold <kbd>SET 1–4</kbd></td><td class="mode">anywhere</td><td>step view of row A–D</td></tr>
+          <tr><td>Hold the row's <kbd>SET</kbd></td><td class="mode">step view</td><td>the row's settings (again: back)</td></tr>
+          <tr><td>Encoder</td><td class="mode">settings</td><td>scroll the settings</td></tr>
+          <tr><td>Hold <kbd>FINE</kbd> + turn</td><td class="mode">settings</td><td>change the value</td></tr>
+          <tr><td>Hold the page's <kbd>SET</kbd> + turn</td><td class="mode">PLAY, OUT, CTRL</td><td>choose the slider</td></tr>
+          <tr><td>Touch a slider</td><td class="mode">step view</td><td>write into the row</td></tr>
+          <tr><td>Hold a slider + turn</td><td class="mode">step view</td><td>edit that stage</td></tr>
+          <tr><td>Encoder</td><td class="mode">step view</td><td>stopped: step by hand · running: pick a stage</td></tr>
+          <tr><td>Hold <kbd>FINE</kbd> + turn</td><td class="mode">step view</td><td>edit the shown stage</td></tr>
+          <tr><td>Hold the row's <kbd>SET</kbd> + turn</td><td class="mode">step view</td><td>shift the row (with FINE: its length)</td></tr>
+          <tr><td>Encoder</td><td class="mode">idle</td><td>step the stopped rows by hand</td></tr>
+          <tr><td>Tap <kbd>FINE</kbd></td><td class="mode">anywhere</td><td>fine steps on or off</td></tr>
+          <tr><td>Double tap <kbd>FINE</kbd></td><td class="mode">anywhere</td><td>start or stop all rows</td></tr>
+          <tr><td>Tap <kbd>HOLD</kbd></td><td class="mode">anywhere</td><td>arm, disarm, or close a recording into a loop</td></tr>
+          <tr><td>Hold <kbd>HOLD</kbd> + touch</td><td class="mode">not armed</td><td>record while held</td></tr>
+          <tr><td>Hold <kbd>HOLD</kbd> + touch a loop</td><td class="mode">armed</td><td>stop that loop</td></tr>
+          <tr><td>Keep holding <kbd>HOLD</kbd></td><td class="mode">armed</td><td>stop all loops</td></tr>
+          <tr><td>Tap <kbd>SAVE</kbd> / <kbd>LOAD</kbd>, turn, tap</td><td class="mode">anywhere</td><td>store or load a slot, or load a template</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="specs">
+      <h2>Specifications</h2>
+      <div class="tbl"><table class="wrap1">
+        <tbody>
+          <tr><td>Voltage outputs</td><td>0 to about 8.2 V, 12 bit, calibrated per output; 1 V/octave</td></tr>
+          <tr><td>Gates and triggers</td><td>triggers 1–20 ms (2 ms default), at least 10 ms apart</td></tr>
+          <tr><td>Recording</td><td>up to 20 s per slider or pad, all at once</td></tr>
+          <tr><td>Patches</td><td>4 slots with optional autosave, plus 4 templates</td></tr>
+          <tr><td>Sequencer</td><td>8 stages × 4 rows, each with its own run, length, direction, speed (/4 to x4), range and scale; 20–300 BPM, divisions 1/1 to 1/32 with triplets</td></tr>
+          <tr><td>LFO rates</td><td>0.02–25 Hz, or tempo synced from 4 bars to 1/32</td></tr>
+        </tbody>
+      </table></div>
+      <footer>Motus Touch Controller · layout &amp; design by Arev Imer. Describes the firmware on the <i>sequencer</i> branch, November 2026.</footer>
+    </section>
+  </main>
+</div>
+
+<script>
+// LCD screens: 8x2 characters; {length,step} in the text is the idle screen's tube glyph.
+function cells(text) {
+  const out = [];
+  for (let i = 0; i < text.length; ) {
+    const m = text.slice(i).match(/^\{(\d),(\d)\}/);
+    if (m) { out.push({ tube: [+m[1], +m[2]] }); i += m[0].length; }
+    else { const ch = String.fromCodePoint(text.codePointAt(i)); out.push(ch); i += ch.length; }
+  }
+  while (out.length < 8) out.push(' ');
+  return out.slice(0, 8);
+}
+function tubeSvg([len, filled]) {
+  let r = '';
+  for (let i = 0; i < 8; i++) {           // from the bottom, 5x8 pixels
+    const bits = i < filled ? 0b11111 : i < len ? 0b10001 : 0;
+    for (let b = 0; b < 5; b++) if (bits & (1 << (4 - b)))
+      r += `<rect x="${1.5 + b * 2.5}" y="${19 - i * 2.2}" width="2.1" height="1.9"/>`;
+  }
+  return `<svg viewBox="0 0 15 22" fill="#1f2a12" aria-hidden="true">${r}</svg>`;
+}
+document.querySelectorAll('figure.lcd').forEach(f => {
+  const rows = [f.dataset.top || '', f.dataset.bot || ''];
+  const glass = rows.map(t => cells(t).map(c => typeof c === 'string'
+    ? `<span>${c.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</span>` : tubeSvg(c.tube)).join('')).join('');
+  const label = rows.map(t => t.replace(/\{\d,\d\}/g, '▯').trim()).join(' / ');
+  f.innerHTML = `<div class="bez" role="img" aria-label="Display: ${label}"><div class="glass">${glass}</div></div>` +
+    (f.dataset.cap ? `<figcaption>${f.dataset.cap}</figcaption>` : '');
+});
+
+// Panel figures: crops of panel.png with gestures drawn on top, in panel points (595 x 364, origin bottom left),
+// the same coordinates as docs/build_manual.py.
+const PW = 595.28, PH = 364.25;
+const SX = [128.6, 173.5, 218.5, 263.4, 308.3, 353.3, 398.4, 443.4], ST = 177, SB = 28;
+const PAD = [[55.8, 192.9], [55.8, 75.6]];
+const SET = [[484.8, 243.8], [515.5, 243.8], [546.1, 243.8], [576.5, 243.8]];
+const FINE = [488.4, 126.2], HOLD = [517.3, 126.2], ENC = [529.5, 61];
+const LCD = [482.7, 159.5, 578.9, 201.2];
+const RIGHT = [290, 18, 595, 262.5];
+const sy = f => SB + f * (ST - SB);
+const Y = y => PH - y;
+const FIGS = {
+  play: [[0, 18, 287, 236], [
+    ['arrow', SX[0] + 11, sy(.2), SX[0] + 11, sy(.85), true],
+    ['finger', SX[0], sy(.55), 'slide', 'l'],
+    ['finger', SX[2], sy(.25), 'hold', 'b', true, '1'],
+    ['arrow', SX[2] + 12, sy(.3), SX[2] + 12, sy(.78), false, true],
+    ['finger', SX[2], sy(.85), '2nd finger: jump', 't', false, '2'],
+    ['arrow', PAD[0][0] - 30, PAD[0][1], PAD[0][0] + 30, PAD[0][1], true],
+    ['arrow', PAD[0][0], PAD[0][1] - 30, PAD[0][0], PAD[0][1] + 30, true],
+    ['finger', ...PAD[0], 'X, Y, press: Z', 'b']]],
+  menu1: [RIGHT, [['finger', SX[5], sy(.55), 'touch: select', 'r', false, '1'],
+    ['finger', ...SET[0], 'tap', 'b', false, '2'], ['finger', ...FINE, 'hold', 'l', true, '3'],
+    ['turn', 'turn: change'], ['lcd', '#6 QUANT', '   major']]],
+  menu2: [RIGHT, [['finger', ...SET[0], 'hold SET 1', 'b', true], ['turn', 'turn: choose slider'],
+    ['glow', 5], ['lcd', '#6 RANGE', '+24 st']]],
+  seq1: [RIGHT, [['finger', ...SET[1], 'hold', 'b', true, '1'],
+    ['finger', SX[5], sy(.7), 'touch: write', 'r', false, '2'], ['lcd', '#6 → B', 'C#2 2.08']]],
+  seq2: [RIGHT, [['finger', ...SET[1], 'hold again', 'b', true, '1'], ['finger', ...FINE, 'hold', 'l', true, '2'],
+    ['turn', 'turn: change'], ['lcd', 'B  SPEED', '      x2']]],
+  rec1: [RIGHT, [['finger', ...HOLD, 'tap: arm, then loop', 'b', false, '1'],
+    ['arrow', SX[5] + 11, sy(.2), SX[5] + 11, sy(.8), true],
+    ['finger', SX[5], sy(.5), 'play', 'l', false, '2'], ['lcd', 'STOP 120', 'Slot 2● ']]],
+  rec2: [RIGHT, [['finger', ...HOLD, 'hold', 'b', true, '1'],
+    ['arrow', SX[6] + 11, sy(.2), SX[6] + 11, sy(.8), true],
+    ['finger', SX[6], sy(.5), 'play', 'l', false, '2'], ['lcd', '   4.12V', '']]],
+};
+const measure = document.createElement('canvas').getContext('2d');
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+function figure(crop, ops) {
+  const [x0, y0, x1, y1] = crop, s = (x1 - x0) / 300;   // overlay size relative to a 300 pt wide crop
+  const FS = 9 * s, R = 7 * s, SW = 2.2 * s, HEAD = 7 * s;
+  let out = '', tags = '';
+  const tag = (x, y, text, side) => {           // x, y: svg coordinates of the label's anchor
+    measure.font = `500 ${FS}px "IBM Plex Sans", sans-serif`;
+    const w = measure.measureText(text).width;
+    let tx = side === 'l' ? x - w : side === 'c' ? x - w / 2 : x;
+    tx = Math.max(x0 + 4, Math.min(tx, x1 - w - 4));
+    tags += `<rect x="${tx - 3 * s}" y="${y - FS * 0.9}" width="${w + 6 * s}" height="${FS * 1.3}" rx="${2 * s}" fill="#111110" fill-opacity=".88"/>` +
+      `<text x="${tx}" y="${y}" font-size="${FS}" fill="#fff" font-family="IBM Plex Sans, sans-serif" font-weight="500">${esc(text)}</text>`;
+  };
+  const head = (ax, ay, bx, by) => {
+    const a = Math.atan2(by - ay, bx - ax);
+    return `<path d="M${bx},${by} L${bx - HEAD * Math.cos(a - .45)},${by - HEAD * Math.sin(a - .45)} L${bx - HEAD * Math.cos(a + .45)},${by - HEAD * Math.sin(a + .45)}Z" fill="#e0532f"/>`;
+  };
+  for (const [op, ...a] of ops) {
+    if (op === 'arrow') {
+      const [ax, ay, bx, by] = [a[0], Y(a[1]), a[2], Y(a[3])];
+      out += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="#e0532f" stroke-width="${SW}"${a[5] ? ` stroke-dasharray="${4 * s} ${3 * s}"` : ''}/>` +
+        head(ax, ay, bx, by) + (a[4] ? head(bx, by, ax, ay) : '');
+    } else if (op === 'finger') {
+      const [x, y, note, side = 'r', held, n] = [a[0], Y(a[1]), a[2], a[3], a[4], a[5]];
+      if (held) out += `<circle cx="${x}" cy="${y}" r="${R + 4 * s}" fill="none" stroke="#e0532f" stroke-width="${1.8 * s}"/>`;
+      out += `<circle cx="${x}" cy="${y}" r="${R}" fill="#e0532f" stroke="#fff" stroke-width="${1.2 * s}"/>`;
+      if (n) out += `<text x="${x}" y="${y + 3.2 * s}" font-size="${9 * s}" text-anchor="middle" fill="#fff" font-weight="700" font-family="IBM Plex Sans, sans-serif">${n}</text>`;
+      if (note) {
+        const g = R + (held ? 9 : 6) * s;
+        if (side === 'r') tag(x + g, y + FS * .35, note, 'r');
+        else if (side === 'l') tag(x - g, y + FS * .35, note, 'l');
+        else if (side === 'b') tag(x, y + g + FS, note, 'c');
+        else tag(x, y - g - FS * .4, note, 'c');
+      }
+    } else if (op === 'turn') {
+      const [cx, cy] = [ENC[0], Y(ENC[1])], r = 44, t1 = 35 * Math.PI / 180, t2 = 145 * Math.PI / 180;
+      const p = t => [cx + r * Math.cos(t), cy - r * Math.sin(t)];
+      const [ax, ay] = p(t1), [bx, by] = p(t2);
+      out += `<path d="M${ax},${ay} A${r},${r} 0 0 0 ${bx},${by}" fill="none" stroke="#e0532f" stroke-width="${SW}"/>`;
+      for (const [t, sign] of [[t1, -1], [t2, 1]]) {
+        const [ex, ey] = p(t), dx = -Math.sin(t) * sign, dy = -Math.cos(t) * sign;
+        out += head(ex - dx * 5, ey - dy * 5, ex + dx, ey + dy);
+      }
+      tag(cx - r - 6 * s, cy + FS * .35, a[0], 'l');
+    } else if (op === 'glow') {
+      const x = SX[a[0]] - 16, y = Y(ST + 5);
+      out += `<rect x="${x}" y="${y}" width="32" height="${ST - SB + 10}" rx="3" fill="none" stroke="#f4d35e" stroke-width="${2 * s}" stroke-dasharray="${4 * s} ${3 * s}"/>`;
+    } else if (op === 'lcd') {
+      const [lx0, ly0, lx1, ly1] = LCD, w = lx1 - lx0, h = ly1 - ly0, cw = (w - 6) / 8;
+      out += `<rect x="${lx0}" y="${Y(ly1)}" width="${w}" height="${h}" rx="2" fill="#c5d64a"/>`;
+      a.forEach((t, row) => cells(t).forEach((ch, col) => {
+        out += `<text x="${lx0 + 3 + cw * (col + .5)}" y="${Y(ly1) + h * (.42 + .42 * row)}" font-size="${cw * 1.45}" text-anchor="middle" fill="#1f2a12" font-family="IBM Plex Mono, Menlo, monospace" font-weight="500">${esc(ch)}</text>`;
+      }));
+    }
+  }
+  return `<svg viewBox="${x0} ${Y(y1)} ${x1 - x0} ${y1 - y0}" role="img" aria-hidden="true">` +
+    `<image href="panel.png" x="0" y="0" width="${PW}" height="${PH}"/>${out}${tags}</svg>`;
+}
+// after the fonts load, so the label plates fit their text
+document.fonts.ready.then(() => document.querySelectorAll('figure.panel').forEach(f => {
+  const [crop, ops] = FIGS[f.dataset.fig];
+  f.insertAdjacentHTML('afterbegin', figure(crop, ops));
+}));
+</script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-// Menu: a tap on SET 1, 2 and 4 opens the SLIDER, SEQ and SYS pages, a double
+// Menu: a tap on SET 1-4 opens the PLAY, OUT, CTRL and SEQ (with SYS) pages, a double
 // tap starts or stops that pad's sequencer row, and holding it opens the row's
 // step view; holding it there opens the row's settings. The encoder scrolls,
 // FINE held while turning changes a value, and touching a slider selects which

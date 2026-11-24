@@ -6,7 +6,7 @@
 static const int STORAGE_ADDRESS = 320;           // the single save of earlier firmware
 static const uint32_t STORAGE_MAGIC = 0x4D4F5931; // "MOY1"
 
-static const SystemSettings DEFAULT_SETTINGS = {4, 6, 100, 100, 100, 2, 1, 1};
+static const SystemSettings DEFAULT_SETTINGS = {4, 6, 100, 100, 100, 2, 1, 0};
 
 struct Storage
 {

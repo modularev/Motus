@@ -67,10 +67,28 @@ struct SliderSettings
     uint8_t lfoPhase;  // LFO: phase offset, 0-255 for 0-360 degrees
     int16_t base;      // the output at the bottom of the slider, or the LFO's low point
     int16_t range;     // from base to the top of the slider, or to the LFO's high point; negative inverts
-    uint16_t slewMs;   // SLIDE: glide time, 0-10000 ms
+    uint16_t slewMs;   // CTRL: glide time, 0-10000 ms
+    // CTRL, after the mode (as Zadar's CONTROL): a delay line with feedback, then the slew
+    int8_t slant;      // -100..100 %: the slew's rise against its fall; -100 rises at once, +100 falls at once
+    uint8_t loop;      // 0-100 %: how much of the delayed output is fed back; 100 loops it endlessly
+    uint8_t freeze;    // the line loops at 100 %: 0 never, 1 while untouched, 2 while touched
+    uint8_t reserved;
+    uint16_t delayMs;  // 0-8000 ms
 };
 
 constexpr int MAX_SLEW_MS = 10000;
+constexpr int MAX_DELAY_MS = 8000;
+constexpr int NUM_FREEZE = 3; // off, lift, touch
+
+// the slider settings as saved before CTRL (slant, loop, freeze, delay), 18 bytes
+struct SliderSettingsV9
+{
+    uint8_t mode, scale, root, latch, lfoFreq, slideGate, lfoShape, lfoRate, lfoDepth, lfoReset, lfoGate, lfoPhase;
+    int16_t base;
+    int16_t range;
+    uint16_t slewMs;
+};
+SliderSettings modesFromV9(const SliderSettingsV9 &old);
 
 extern SliderSettings sliderSettings[];
 
@@ -124,11 +142,25 @@ int modesQuantizeCents(int scale, int root, int cents);
 // tempo-synced LFOs start their cycle again, in phase with the sequencer
 void modesSyncRestart();
 
+// a fresh start (a template): every slider as if last touched at the bottom,
+// so a fader outputs its BASE; LFOs start their cycle again, at their slowest
+// rate as after power-up. modesResets() counts the resets, so others can follow.
+void modesResetSliders();
+uint32_t modesResets();
+
 // LFO: the output runs on its own; its current DAC value, and where it is
 // within its swing for the LEDs (10 bit)
 bool modesRunning(int slider);
 int modesOutputCode(int slider);
 int modesLfoLevel(int slider);
+
+// CTRL: a slider with a DELAY keeps moving after release, so it joins the
+// master like an LFO; its LEDs then show the output, not the finger: where
+// the output lies in its range, 10 bit
+bool modesMoving(int slider);
+bool modesShowsOutput(int slider);
+int modesOutputLevel(int slider);
+const char *freezeName(int freeze);
 
 // quantized SLIDE: the LEDs show a dot at the current note, 10 bit
 bool modesShowsDot(int slider);

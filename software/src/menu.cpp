@@ -23,14 +23,20 @@ static const int FAST_FACTOR = 4;
 enum Page
 {
     PAGE_NONE,
-    PAGE_SLIDER, // SET 1: the slider's settings
-    PAGE_SEQ,    // SET 2: the sequencer
-    PAGE_SYS,    // SET 4
-    PAGE_ROW     // a row's settings, from its step view
+    PAGE_PLAY, // SET 1: how the finger plays the slider: its mode and that mode's settings
+    PAGE_OUT,  // SET 2: the slider's output range and quantizer
+    PAGE_CTRL, // SET 3: the slider's output processing: slew, delay, loop
+    PAGE_SEQ,  // SET 4: the sequencer, then the SYS settings
+    PAGE_ROW   // a row's settings, from its step view
 };
 
-// Settings on the slider page, in their order for each mode: first whether
-// the slider runs an LFO, then the settings of that mode
+static bool sliderPage(Page p)
+{
+    return p == PAGE_PLAY || p == PAGE_OUT || p == PAGE_CTRL;
+}
+
+// Settings on the slider pages, in their order: PLAY starts with whether the
+// slider runs an LFO, then the settings of that mode
 enum Setting
 {
     SETTING_QUANT,
@@ -49,17 +55,20 @@ enum Setting
     SETTING_PHASE,
     SETTING_CTRL, // LFO: what the slider sets, the rate or the depth
     SETTING_FREQ, // LFO, the slider sets the depth: the rate
+    SETTING_SLANT,
+    SETTING_DELAY,
+    SETTING_LOOP,
+    SETTING_FREEZE,
 };
-static const Setting SLIDE_SETTINGS[] = {SETTING_LFO, SETTING_QUANT, SETTING_ROOT, SETTING_BASE, SETTING_RANGE,
-                                         SETTING_PLAY, SETTING_SLEW, SETTING_SLIDE_GATE};
-static const Setting LFO_SETTINGS[] = {SETTING_LFO, SETTING_SHAPE, SETTING_CTRL, SETTING_RATE, SETTING_PHASE, SETTING_BASE, SETTING_RANGE,
-                                       SETTING_DEPTH, SETTING_QUANT, SETTING_ROOT, SETTING_RESET, SETTING_LFO_GATE};
+#define COUNT(list) (int)(sizeof(list) / sizeof(list[0]))
+static const Setting PLAY_SLIDE[] = {SETTING_LFO, SETTING_PLAY, SETTING_SLIDE_GATE};
+static const Setting PLAY_LFO[] = {SETTING_LFO, SETTING_SHAPE, SETTING_CTRL, SETTING_RATE, SETTING_PHASE,
+                                   SETTING_DEPTH, SETTING_RESET, SETTING_LFO_GATE};
 // the slider sets the depth: FREQ sets the rate within the RATE range
-static const Setting LFO_DEPTH_SETTINGS[] = {SETTING_LFO, SETTING_SHAPE, SETTING_CTRL, SETTING_RATE, SETTING_FREQ, SETTING_PHASE, SETTING_BASE,
-                                             SETTING_RANGE, SETTING_DEPTH, SETTING_QUANT, SETTING_ROOT, SETTING_RESET, SETTING_LFO_GATE};
-static const int NUM_SLIDE_SETTINGS = sizeof(SLIDE_SETTINGS) / sizeof(SLIDE_SETTINGS[0]);
-static const int NUM_LFO_SETTINGS = sizeof(LFO_SETTINGS) / sizeof(LFO_SETTINGS[0]);
-static const int NUM_LFO_DEPTH_SETTINGS = sizeof(LFO_DEPTH_SETTINGS) / sizeof(LFO_DEPTH_SETTINGS[0]);
+static const Setting PLAY_LFO_DEPTH[] = {SETTING_LFO, SETTING_SHAPE, SETTING_CTRL, SETTING_RATE, SETTING_FREQ, SETTING_PHASE,
+                                         SETTING_DEPTH, SETTING_RESET, SETTING_LFO_GATE};
+static const Setting OUT_SETTINGS[] = {SETTING_QUANT, SETTING_ROOT, SETTING_BASE, SETTING_RANGE};
+static const Setting CTRL_SETTINGS[] = {SETTING_SLEW, SETTING_SLANT, SETTING_DELAY, SETTING_LOOP, SETTING_FREEZE};
 static const int FREQ_COARSE_STEP = 8;  // FREQ: of 255 along the RATE range, 1 with FINE
 static const int FREQ_SYNC_STEP = 32;   // one sync division
 
@@ -69,9 +78,11 @@ static const int OCTAVE_CENTS = 12 * SEMITONE_CENTS;
 static const int VOLT_COARSE_STEP = CENTS_PER_VOLT;
 static const int VOLT_FINE_STEP = CENTS_PER_VOLT / 10;
 
-// SLEW: coarse steps through these times, FINE in steps of about 1%
+// SLEW and DELAY: coarse steps through these times, FINE in steps of about 1%
 static const int SLEW_STEPS[] = {0, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000};
-static const int NUM_SLEW_STEPS = sizeof(SLEW_STEPS) / sizeof(SLEW_STEPS[0]);
+static const int DELAY_STEPS[] = {0, 10, 20, 50, 100, 200, 250, 500, 750, 1000, 1500, 2000, 3000, 4000, 6000, 8000};
+static const int SLANT_STEP = 10; // %, 1 with FINE
+static const int LOOP_STEP = 5;   // %, 1 with FINE
 
 // settings on the SEQ page
 enum SeqItem
@@ -147,18 +158,45 @@ static uint32_t lastInput = 0;
 static uint8_t lastButtons = 0;
 static bool padUsed[4]; // the encoder turned or a slider was touched while the SET pad was held: no tap or hold
 
-static int itemCount(Page p)
+// the settings of a slider page, for the slider edited; returns how many
+static int pageSettings(Page p, const Setting *&list)
 {
+    const SliderSettings &s = sliderSettings[slider];
     switch (p)
     {
+    case PAGE_OUT:
+        list = OUT_SETTINGS;
+        return COUNT(OUT_SETTINGS);
+    case PAGE_CTRL:
+        list = CTRL_SETTINGS;
+        return COUNT(CTRL_SETTINGS);
+    default:
+        if (s.mode != MODE_LFO)
+        {
+            list = PLAY_SLIDE;
+            return COUNT(PLAY_SLIDE);
+        }
+        if (s.lfoDepth & LFO_DEPTH_SLIDER)
+        {
+            list = PLAY_LFO_DEPTH;
+            return COUNT(PLAY_LFO_DEPTH);
+        }
+        list = PLAY_LFO;
+        return COUNT(PLAY_LFO);
+    }
+}
+
+static int itemCount(Page p)
+{
+    const Setting *list;
+    switch (p)
+    {
+    case PAGE_PLAY:
+    case PAGE_OUT:
+    case PAGE_CTRL:
+        return pageSettings(p, list);
     case PAGE_SEQ:
-        return NUM_SEQ_ITEMS;
-    case PAGE_SLIDER:
-        if (sliderSettings[slider].mode != MODE_LFO)
-            return NUM_SLIDE_SETTINGS;
-        return (sliderSettings[slider].lfoDepth & LFO_DEPTH_SLIDER) ? NUM_LFO_DEPTH_SETTINGS : NUM_LFO_SETTINGS;
-    case PAGE_SYS:
-        return NUM_SYS_ITEMS;
+        return NUM_SEQ_ITEMS + NUM_SYS_ITEMS; // SYS follows the sequencer
     case PAGE_ROW:
         return NUM_ROW_ITEMS;
     default:
@@ -168,11 +206,9 @@ static int itemCount(Page p)
 
 static Setting currentSetting()
 {
-    if (sliderSettings[slider].mode == MODE_LFO && (sliderSettings[slider].lfoDepth & LFO_DEPTH_SLIDER))
-        return LFO_DEPTH_SETTINGS[min(item, NUM_LFO_DEPTH_SETTINGS - 1)];
-    if (sliderSettings[slider].mode == MODE_LFO)
-        return LFO_SETTINGS[min(item, NUM_LFO_SETTINGS - 1)];
-    return SLIDE_SETTINGS[min(item, NUM_SLIDE_SETTINGS - 1)];
+    const Setting *list;
+    int count = pageSettings(page, list);
+    return list[min(item, count - 1)];
 }
 
 // whole detents turned since the last call
@@ -194,13 +230,14 @@ static int fastFactor()
     return sinceDetent < FAST_TURN_MS ? FAST_FACTOR : 1;
 }
 
-// SLEW: the next coarse time up or down, or about 1% steps with FINE
-static void stepSlew(uint16_t &value, int detents)
+// SLEW and DELAY: the next coarse time up or down, or about 1% steps with FINE
+template <int N>
+static void stepTime(uint16_t &value, int detents, const int (&steps)[N])
 {
     if (fine)
     {
         int step = value < 100 ? 1 : (value < 1000 ? 10 : 100);
-        value = constrain((int)value + detents * step * fastFactor(), 0, MAX_SLEW_MS);
+        value = constrain((int)value + detents * step * fastFactor(), 0, steps[N - 1]);
         return;
     }
     for (int d = 0; d < abs(detents); d++)
@@ -208,19 +245,19 @@ static void stepSlew(uint16_t &value, int detents)
         int next = value;
         if (detents > 0)
         {
-            for (int i = 0; i < NUM_SLEW_STEPS; i++)
-                if (SLEW_STEPS[i] > value)
+            for (int i = 0; i < N; i++)
+                if (steps[i] > value)
                 {
-                    next = SLEW_STEPS[i];
+                    next = steps[i];
                     break;
                 }
         }
         else
         {
-            for (int i = NUM_SLEW_STEPS - 1; i >= 0; i--)
-                if (SLEW_STEPS[i] < value)
+            for (int i = N - 1; i >= 0; i--)
+                if (steps[i] < value)
                 {
-                    next = SLEW_STEPS[i];
+                    next = steps[i];
                     break;
                 }
         }
@@ -228,10 +265,10 @@ static void stepSlew(uint16_t &value, int detents)
     }
 }
 
-static void changeSystem(int detents)
+static void changeSystem(int sysItem, int detents)
 {
     SystemSettings &y = systemSettings;
-    switch (item)
+    switch (sysItem)
     {
     case SYS_SMOOTH:
         stepSetting(y.smooth, detents, 1, 10);
@@ -260,10 +297,10 @@ static void changeSystem(int detents)
     }
 }
 
-static void formatSystem(char *bottom, size_t size)
+static void formatSystem(int sysItem, char *bottom, size_t size)
 {
     const SystemSettings &y = systemSettings;
-    switch (item)
+    switch (sysItem)
     {
     case SYS_SMOOTH:
         snprintf(bottom, size, "%8u", (unsigned)y.smooth % 100);
@@ -300,6 +337,11 @@ static void change(int detents)
     {
     case PAGE_SEQ:
     {
+        if (item >= NUM_SEQ_ITEMS)
+        {
+            changeSystem(item - NUM_SEQ_ITEMS, detents);
+            break;
+        }
         SeqSettings &q = seqSettings;
         switch (item)
         {
@@ -361,7 +403,9 @@ static void change(int detents)
         break;
     }
 
-    case PAGE_SLIDER:
+    case PAGE_PLAY:
+    case PAGE_OUT:
+    case PAGE_CTRL:
     {
         // big steps stay single, small steps speed up when turning fast
         int voltStep = s.scale ? (fine ? SEMITONE_CENTS * fastFactor() : OCTAVE_CENTS)
@@ -411,7 +455,19 @@ static void change(int detents)
             stepSetting(s.latch, detents, 0, 1);
             break;
         case SETTING_SLEW:
-            stepSlew(s.slewMs, detents);
+            stepTime(s.slewMs, detents, SLEW_STEPS);
+            break;
+        case SETTING_SLANT:
+            s.slant = constrain(s.slant + detents * (fine ? fastFactor() : SLANT_STEP), -100, 100);
+            break;
+        case SETTING_DELAY:
+            stepTime(s.delayMs, detents, DELAY_STEPS);
+            break;
+        case SETTING_LOOP:
+            s.loop = constrain((int)s.loop + detents * (fine ? fastFactor() : LOOP_STEP), 0, 100);
+            break;
+        case SETTING_FREEZE:
+            stepSetting(s.freeze, detents, 0, NUM_FREEZE - 1);
             break;
         case SETTING_SLIDE_GATE:
             stepSetting(s.slideGate, detents, 0, 2);
@@ -434,10 +490,6 @@ static void change(int detents)
         }
         break;
     }
-
-    case PAGE_SYS:
-        changeSystem(detents);
-        break;
 
     default:
         break;
@@ -502,6 +554,21 @@ static void formatSetting(char *bottom, size_t size, Setting setting, const Slid
         else
             snprintf(bottom, size, "%5u ms", (unsigned)s.slewMs % 100000);
         break;
+    case SETTING_SLANT:
+        snprintf(bottom, size, "%6d %%", constrain((int)s.slant, -100, 100));
+        break;
+    case SETTING_DELAY:
+        if (s.delayMs == 0)
+            snprintf(bottom, size, "%8s", "off");
+        else
+            snprintf(bottom, size, "%5u ms", (unsigned)s.delayMs % 100000);
+        break;
+    case SETTING_LOOP:
+        snprintf(bottom, size, "%6u %%", (unsigned)s.loop % 1000);
+        break;
+    case SETTING_FREEZE:
+        snprintf(bottom, size, "%8s", freezeName(s.freeze));
+        break;
     case SETTING_SLIDE_GATE:
     {
         static const char *GATES[3] = {"gate", "retrig", "trig"};
@@ -538,8 +605,9 @@ static void formatSetting(char *bottom, size_t size, Setting setting, const Slid
 // the two screen lines for the current page and setting
 static void show()
 {
-    static const char *SETTING_NAMES[] = {"QUANT", "ROOT", "BASE", "RANGE", "PLAY", "SLEW", "GATE", "SHAPE",
-                                          "RATE", "DEPTH", "RESET", "GATE", "LFO", "PHASE", "CTRL", "FREQ"};
+    // the LFO's CTRL (what the slider sets) shows as SETS, apart from the CTRL page
+    static const char *SETTING_NAMES[] = {"QUANT", "ROOT", "BASE", "RANGE", "PLAY", "SLEW", "GATE", "SHAPE", "RATE", "DEPTH",
+                                          "RESET", "GATE", "LFO", "PHASE", "SETS", "FREQ", "SLANT", "DELAY", "LOOP", "FREEZE"};
     char top[9];
     char bottom[9];
     const SliderSettings &s = sliderSettings[slider];
@@ -549,6 +617,12 @@ static void show()
     {
     case PAGE_SEQ:
     {
+        if (item >= NUM_SEQ_ITEMS)
+        {
+            snprintf(top, sizeof(top), "%s", SYS_NAMES[item - NUM_SEQ_ITEMS]);
+            formatSystem(item - NUM_SEQ_ITEMS, bottom, sizeof(bottom));
+            break;
+        }
         const SeqSettings &q = seqSettings;
         snprintf(top, sizeof(top), "%s", SEQ_NAMES[item]);
         switch (item)
@@ -610,18 +684,15 @@ static void show()
         break;
     }
 
-    case PAGE_SLIDER:
+    case PAGE_PLAY:
+    case PAGE_OUT:
+    case PAGE_CTRL:
     {
         Setting setting = currentSetting();
         snprintf(top, sizeof(top), "#%u%c%s", number, fine ? GLYPH_FINE : ' ', SETTING_NAMES[setting]);
         formatSetting(bottom, sizeof(bottom), setting, s);
         break;
     }
-
-    case PAGE_SYS:
-        snprintf(top, sizeof(top), "%s", SYS_NAMES[item]);
-        formatSystem(bottom, sizeof(bottom));
-        break;
 
     default:
         return;
@@ -650,10 +721,10 @@ static void closeViews()
 }
 
 // a single tap on a SET pad: its settings page; in a step view or a row's
-// settings, on the page itself or on a pad without a page, closing it
+// settings, or on the page itself, closing it
 static void padTap(int pad, Page padPage)
 {
-    if (stepView >= 0 || page == padPage || padPage == PAGE_NONE)
+    if (stepView >= 0 || page == padPage)
     {
         closeViews();
         return;
@@ -672,14 +743,14 @@ void menuUpdate(uint8_t buttons)
     int detents = readDetents();
 
     // SET pads, from anywhere: a tap opens the pad's settings page (or closes
-    // it, as it closes a step view and a row's settings; SET 3 has no page), a double tap starts or stops the pad's row, and holding opens the
+    // it, as it closes a step view and a row's settings), a double tap starts or stops the pad's row, and holding opens the
     // row's step view. Holding the pad in its step view opens the row's
     // settings, holding it there again goes back. A pad held while the encoder
     // turns or a slider is touched is a modifier: no tap and no hold.
-    static const Page PAGES[4] = {PAGE_SLIDER, PAGE_SEQ, PAGE_NONE, PAGE_SYS};
+    static const Page PAGES[4] = {PAGE_PLAY, PAGE_OUT, PAGE_CTRL, PAGE_SEQ};
     static uint32_t pressMs[4];
     static bool holdDone[4];
-    static int tapPad = -1; // a tap waiting to see whether a second one follows
+    static int tapPad = -1; // the last single tap, which a second one soon after makes a double tap
     static uint32_t tapMs = 0;
     int heldPad = -1;
     for (int i = 0; i < 4; i++)
@@ -718,7 +789,8 @@ void menuUpdate(uint8_t buttons)
 
         if (tapPad == i && now - tapMs < DOUBLE_TAP_MS)
         {
-            // a double tap: the row runs or stops
+            // a double tap: the row runs or stops. The first tap has already
+            // acted on its own, so the view it opened stays.
             tapPad = -1;
             bool run = !sequencerRowRunning(i);
             sequencerSetRowRunning(i, run);
@@ -728,17 +800,12 @@ void menuUpdate(uint8_t buttons)
         }
         else
         {
-            if (tapPad >= 0)
-                padTap(tapPad, PAGES[tapPad]);
+            // a single tap acts at once, without waiting for a second one
+            padTap(i, PAGES[i]);
             tapPad = i;
             tapMs = now;
         }
         lastInput = now;
-    }
-    if (tapPad >= 0 && now - tapMs >= DOUBLE_TAP_MS)
-    {
-        padTap(tapPad, PAGES[tapPad]);
-        tapPad = -1;
     }
 
     // FINE: a tap (on lift) toggles fine steps; held while the encoder turns,
@@ -807,6 +874,8 @@ void menuUpdate(uint8_t buttons)
     {
         if (heldPad >= 0)
             padUsed[heldPad] = true;
+        if (fineHeld)
+            fineTurned = true; // FINE held while turning is no tap, wherever it turned
 
         if (stepView >= 0 && page == PAGE_NONE && writeHeld >= 0)
         {
@@ -866,9 +935,9 @@ void menuUpdate(uint8_t buttons)
                 change(detents); // FINE held: the value
                 fineTurned = true;
             }
-            else if (page == PAGE_SLIDER && heldPad >= 0 && PAGES[heldPad] == PAGE_SLIDER)
+            else if (sliderPage(page) && heldPad >= 0 && PAGES[heldPad] == page)
             {
-                // SET 1 held on the slider page: which slider is edited
+                // the page's own SET pad held on a slider page: which slider is edited
                 slider = ((slider + detents) % NUM_SLIDERS + NUM_SLIDERS) % NUM_SLIDERS;
                 item = min(item, itemCount(page) - 1);
             }
@@ -891,6 +960,10 @@ void menuUpdate(uint8_t buttons)
         else
             closeViews();
     }
+
+    // fine steps last one editing session: they end when the menu closes
+    if (!menuActive())
+        fine = false;
 
     // the step view is where touches write into its row
     if (sequencerWriteRow() != stepView)

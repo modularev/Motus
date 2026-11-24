@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <EEPROM.h>
+#include <Entropy.h>
 
 #include "analogout.h"
 #include "config.h"
@@ -80,13 +81,35 @@ static const ScaleInfo SCALES[NUM_SCALES] = {
 static const char *MODE_NAMES[NUM_MODES] = {"slide", "lfo"};
 static const char *NOTE_NAMES[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 
-static const SliderSettings DEFAULT_SETTINGS = {MODE_SLIDE, 0, 0, 0, 128, 0, LFO_SINE, 1, 0, 0, 0, 0, 0, 8 * CENTS_PER_VOLT, 0};
+static const SliderSettings DEFAULT_SETTINGS = {MODE_SLIDE, 0, 0, 0, 128, 0, LFO_SINE, 1, 0, 0, 0, 0, 0, 8 * CENTS_PER_VOLT, 0, 0, 0, 0, 0, 0};
 
 struct Storage // as saved by earlier firmware
 {
     uint32_t magic;
-    SliderSettings settings[NUM_SLIDERS];
+    SliderSettingsV9 settings[NUM_SLIDERS];
 };
+
+SliderSettings modesFromV9(const SliderSettingsV9 &o)
+{
+    SliderSettings s = DEFAULT_SETTINGS;
+    s.mode = o.mode;
+    s.scale = o.scale;
+    s.root = o.root;
+    s.latch = o.latch;
+    s.lfoFreq = o.lfoFreq;
+    s.slideGate = o.slideGate;
+    s.lfoShape = o.lfoShape;
+    s.lfoRate = o.lfoRate;
+    s.lfoDepth = o.lfoDepth;
+    s.lfoReset = o.lfoReset;
+    s.lfoGate = o.lfoGate;
+    s.lfoPhase = o.lfoPhase;
+    s.base = o.base;
+    s.range = o.range;
+    // SLEW was for SLIDE only: an LFO keeps its sharp edges
+    s.slewMs = o.mode == MODE_LFO ? 0 : o.slewMs;
+    return s;
+}
 
 // Settings as saved before BASE and RANGE (POS, NOTE and LFO modes). Older
 // layouts only have the first fields, the rest keep these defaults.
@@ -209,10 +232,26 @@ struct Lfo
     uint32_t sampledMs;
     uint32_t lastUs;
     uint32_t writtenUs;
-    int code;     // DAC value written
     int semitone; // quantized note, -1 before the first
 };
 static Lfo lfo[NUM_SLIDERS];
+
+// CTRL, after the mode, as in Zadar's CONTROL: the mode's output runs through
+// a delay line (1 kHz) with feedback, is quantized again when the slider is
+// (a line fed partly back mixes values between notes), and glides with SLEW,
+// its rise and fall set apart by SLANT. Without DELAY it passes straight on.
+static const int CTL_LEN = 8192; // samples of 1 ms: more than MAX_DELAY_MS
+DMAMEM static int16_t ctlLine[NUM_SLIDERS][CTL_LEN]; // cents
+struct Ctl
+{
+    float x;         // volts from the mode
+    float tap;       // volts out of the line
+    uint16_t write;  // the next sample's index
+    uint32_t lastMs; // the line has run up to here
+    bool touched;    // for FREEZE
+    int code;        // DAC value written, -1 to write it again
+};
+static Ctl ctl[NUM_SLIDERS];
 
 // Triggers are shorter than a sensor scan, so their gates are not written by
 // the main loop but by a timer interrupt, which switches them on and off on
@@ -222,6 +261,11 @@ static IntervalTimer trigTimer;
 static const int MASTER_TRIG = NUM_SLIDERS;
 static volatile bool trigActive[NUM_SLIDERS + 1];
 static volatile uint32_t trigEndUs[NUM_SLIDERS + 1];
+// a trigger fired while the last one is still high: the gate drops for
+// TRIG_LOW_US first, so the two do not merge into one
+static const uint32_t TRIG_LOW_US = 1000;
+static volatile bool trigPending[NUM_SLIDERS + 1];
+static volatile uint32_t trigStartUs[NUM_SLIDERS + 1];
 static uint32_t lastTrigMs[NUM_SLIDERS + 1];
 static volatile uint32_t gateRises[NUM_SLIDERS];
 
@@ -237,8 +281,20 @@ static void fireTrig(int slider)
     if (millis() - lastTrigMs[slider] < TRIG_GAP_MS)
         return;
     lastTrigMs[slider] = millis();
-    trigEndUs[slider] = micros() + systemSettings.trigMs * 1000; // TRIG LEN system setting
-    trigActive[slider] = true;
+    noInterrupts(); // trigTick reads these
+    if (trigActive[slider])
+    {
+        trigActive[slider] = false;
+        trigPending[slider] = true;
+        trigStartUs[slider] = micros() + TRIG_LOW_US;
+    }
+    else
+    {
+        trigPending[slider] = false;
+        trigEndUs[slider] = micros() + systemSettings.trigMs * 1000; // TRIG LEN system setting
+        trigActive[slider] = true;
+    }
+    interrupts();
     if (slider < NUM_SLIDERS)
         gateRises[slider]++;
 }
@@ -251,6 +307,19 @@ void modesFireMasterTrig()
 uint32_t modesGateRises(int slider)
 {
     return gateRises[slider];
+}
+
+// a trigger's state at a timer tick: a pending one starts, a running one ends on time
+static void updateTrig(int i, uint32_t now)
+{
+    if (trigPending[i] && (int32_t)(now - trigStartUs[i]) >= 0)
+    {
+        trigPending[i] = false;
+        trigEndUs[i] = now + systemSettings.trigMs * 1000;
+        trigActive[i] = true;
+    }
+    else if (trigActive[i] && (int32_t)(now - trigEndUs[i]) >= 0)
+        trigActive[i] = false;
 }
 
 static void trigTick()
@@ -267,8 +336,7 @@ static void trigTick()
             continue;
         }
 
-        if (trigActive[slider] && (int32_t)(now - trigEndUs[slider]) >= 0)
-            trigActive[slider] = false;
+        updateTrig(slider, now);
         bool on = trigActive[slider];
 
         // write on a change, and once when the slider switches to triggers
@@ -284,14 +352,14 @@ static void trigTick()
     static bool masterOwned = false;
     if (sequencerRunning())
     {
-        if (trigActive[MASTER_TRIG] && (int32_t)(now - trigEndUs[MASTER_TRIG]) >= 0)
-            trigActive[MASTER_TRIG] = false;
+        updateTrig(MASTER_TRIG, now);
         setMasterGate(trigActive[MASTER_TRIG]);
         masterOwned = true;
     }
     else if (masterOwned)
     {
         trigActive[MASTER_TRIG] = false;
+        trigPending[MASTER_TRIG] = false;
         masterOwned = false;
     }
 }
@@ -347,7 +415,8 @@ void modesLoadLegacy()
     EEPROM.get(STORAGE_ADDRESS, storage);
     if (storage.magic == STORAGE_MAGIC)
     {
-        memcpy(sliderSettings, storage.settings, sizeof(sliderSettings));
+        for (int i = 0; i < NUM_SLIDERS; i++)
+            sliderSettings[i] = modesFromV9(storage.settings[i]);
         return;
     }
 
@@ -381,8 +450,15 @@ void modesLoadLegacy()
     }
 }
 
+static void ctlFill(int slider, float volts);
+
 void modesSetup()
 {
+    // S&H levels and the sequencer's random direction differ at every power-up:
+    // the seed comes from the processor's hardware random number generator
+    Entropy.Initialize();
+    randomSeed(Entropy.random());
+
     for (int i = 0; i < NUM_SLIDERS; i++)
     {
         currentStep[i] = -1;
@@ -391,6 +467,7 @@ void modesSetup()
         lfo[i].slid = 1.0f; // full depth until the slider is touched
         lfo[i].semitone = -1;
         lfo[i].lastUs = micros();
+        ctlFill(i, 0);
     }
     trigTimer.begin(trigTick, TRIG_TICK_US);
 }
@@ -539,15 +616,17 @@ const char *modesValueTextIn(const SliderSettings &s, int cents)
     return text;
 }
 
-// move the glide on and write the output; returns the DAC value
-static int glideOutput(int slider)
+// move the glide on: SLEW is the time from one value to the next, and SLANT
+// makes rises slower than falls (positive) or the other way round
+static float glideVolts(int slider)
 {
+    const SliderSettings &s = sliderSettings[slider];
     Glide &g = glide[slider];
-    int time = sliderSettings[slider].slewMs;
-    float t = time > 0 ? (float)(millis() - g.startMs) / time : 1.0f;
+    float slant = constrain((int)s.slant, -100, 100) / 100.0f;
+    float time = s.slewMs * (g.to > g.from ? 1.0f + slant : 1.0f - slant);
+    float t = time >= 1.0f ? (float)(millis() - g.startMs) / time : 1.0f;
     g.volts = t >= 1.0f ? g.to : g.from + t * (g.to - g.from);
-
-    return setSliderVolts(slider, g.volts);
+    return g.volts;
 }
 
 static void glideTo(int slider, float volts)
@@ -558,6 +637,70 @@ static void glideTo(int slider, float volts)
     g.from = g.volts;
     g.to = volts;
     g.startMs = millis();
+}
+
+static bool ctlFrozen(int slider)
+{
+    uint8_t freeze = sliderSettings[slider].freeze;
+    return (freeze == 1 && !ctl[slider].touched) || (freeze == 2 && ctl[slider].touched);
+}
+
+static int16_t lineCents(float volts)
+{
+    return constrain(lroundf(volts * CENTS_PER_VOLT), 0, MAX_CENTS);
+}
+
+// the delay line runs on to now, a sample per millisecond: what comes out is
+// the input DELAY ago, plus LOOP of what came out then (100 %, or FREEZE: the
+// last DELAY loops on its own)
+static void ctlRun(int slider)
+{
+    const SliderSettings &s = sliderSettings[slider];
+    Ctl &c = ctl[slider];
+    uint32_t now = millis();
+    uint32_t due = min(now - c.lastMs, (uint32_t)CTL_LEN);
+    c.lastMs = now;
+    int delay = min((int)s.delayMs, MAX_DELAY_MS);
+    float loop = delay == 0 ? 0.0f : ctlFrozen(slider) ? 1.0f : min((int)s.loop, 100) / 100.0f;
+    for (uint32_t i = 0; i < due; i++)
+    {
+        if (delay > 0)
+            c.tap = ctlLine[slider][(c.write - delay) & (CTL_LEN - 1)] / (float)CENTS_PER_VOLT;
+        ctlLine[slider][c.write] = lineCents((1.0f - loop) * c.x + loop * c.tap);
+        c.write = (c.write + 1) & (CTL_LEN - 1);
+    }
+    if (delay == 0)
+        c.tap = c.x; // straight through, at once
+}
+
+// the line's output, quantized again, glides; the output is written when its
+// DAC value changes. Returns the DAC value.
+static int ctlOutput(int slider)
+{
+    const SliderSettings &s = sliderSettings[slider];
+    Ctl &c = ctl[slider];
+    float target = c.tap;
+    if (s.delayMs > 0 && s.scale)
+        target = nearestNote(SCALES[s.scale - 1], s.root, target) / 12.0f;
+    glideTo(slider, target);
+    int code = sliderVoltsToCode(slider, glideVolts(slider));
+    if (code != c.code)
+    {
+        setSliderDAC12(slider, code);
+        c.code = code;
+    }
+    return code;
+}
+
+// the line starts over, full of one value
+static void ctlFill(int slider, float volts)
+{
+    Ctl &c = ctl[slider];
+    c.x = c.tap = volts;
+    for (int i = 0; i < CTL_LEN; i++)
+        ctlLine[slider][i] = lineCents(volts);
+    c.lastMs = millis();
+    c.code = -1;
 }
 
 // SLIDE target for a position: the scale note, or the voltage between base
@@ -675,12 +818,13 @@ bool modesGate(int slider, bool touchGate)
 int modesSliderOutput(int slider, int position, int pressure, bool &gate)
 {
     const SliderSettings &s = sliderSettings[slider];
+    ctl[slider].touched = gate;
     if (s.mode == MODE_LFO)
     {
         lfoInput(slider, position, pressure, gate);
         lastGate[slider] = gate;
         gate = modesGate(slider, gate);
-        return lfo[slider].code; // written by modesUpdate
+        return ctl[slider].code; // written by modesUpdate
     }
 
     // slide: the output follows the finger. Touch: it is set where the
@@ -694,9 +838,7 @@ int modesSliderOutput(int slider, int position, int pressure, bool &gate)
     {
         if (s.latch)
             currentStep[slider] = -1; // no hysteresis around the old note
-        float volts;
-        semitone = slideTarget(slider, position, volts);
-        glideTo(slider, volts);
+        semitone = slideTarget(slider, position, ctl[slider].x);
     }
 
     // a new note while the gate is already on retriggers it, or fires a trigger
@@ -712,7 +854,8 @@ int modesSliderOutput(int slider, int position, int pressure, bool &gate)
     if (usesTrig(s) && gate && (landed || newNote))
         fireTrig(slider);
     lastGate[slider] = gate;
-    int code = glideOutput(slider);
+    ctlRun(slider);
+    int code = ctlOutput(slider);
 
     if (usesTrig(s))
         gate = modesGate(slider, gate);
@@ -724,16 +867,13 @@ int modesSliderOutput(int slider, int position, int pressure, bool &gate)
 void modesUpdate()
 {
     static uint8_t lastMode[NUM_SLIDERS];
-    static bool resend[NUM_SLIDERS];
 
     uint32_t now = micros();
     for (int slider = 0; slider < NUM_SLIDERS; slider++)
     {
         const SliderSettings &s = sliderSettings[slider];
         Lfo &l = lfo[slider];
-
-        if (s.mode != lastMode[slider] && s.mode == MODE_SLIDE)
-            resend[slider] = true;
+        bool backToSlide = s.mode != lastMode[slider] && s.mode == MODE_SLIDE;
         lastMode[slider] = s.mode;
 
         float dt = (now - l.lastUs) * 1e-6f;
@@ -752,59 +892,73 @@ void modesUpdate()
                 if (s.lfoGate == LFO_GATE_CYCLE)
                     gateRises[slider]++;
             }
-        }
 
-        // writes are spaced out to keep the I2C bus free for the sensors
+            // swings from base to base + range, quantized to the nearest
+            // scale note if a scale is set, with a trigger on every new note
+            float volts = (s.base + lfoShape(slider, lfoPhase(slider)) * lfoDepth(slider) * s.range) / CENTS_PER_VOLT;
+            if (s.scale)
+            {
+                int semitone = nearestNote(SCALES[s.scale - 1], s.root, volts);
+                if (semitone != l.semitone && s.lfoGate == LFO_GATE_NOTE)
+                    fireTrig(slider);
+                l.semitone = semitone;
+                volts = semitone / 12.0f;
+            }
+            ctl[slider].x = volts;
+        }
+        else if (source[slider].valid && (backToSlide || sourceChanged(slider)))
+        {
+            // back from LFO the held value goes out again, and a held output
+            // follows a change of its quantizer or range at once
+            currentStep[slider] = -1;
+            currentSemitone[slider] = slideTarget(slider, source[slider].position, ctl[slider].x);
+        }
+        ctlRun(slider);
+
+        // writes are spaced out to keep the I2C bus free for the sensors;
+        // a slider not played since power-up stays as it is
         if (now - l.writtenUs < OUTPUT_INTERVAL_US)
             continue;
-
-        if (s.mode == MODE_SLIDE)
-        {
-            // back from LFO: the held SLIDE value goes out again
-            if (resend[slider] && source[slider].valid)
-            {
-                glideOutput(slider);
-                l.writtenUs = now;
-            }
-            resend[slider] = false;
-
-            // a held output follows a change of its quantizer or range at once
-            if (source[slider].valid && sourceChanged(slider))
-            {
-                currentStep[slider] = -1;
-                float volts;
-                currentSemitone[slider] = slideTarget(slider, source[slider].position, volts);
-                glideTo(slider, volts);
-            }
-
-            const Glide &g = glide[slider];
-            if (g.volts != g.to)
-            {
-                glideOutput(slider);
-                l.writtenUs = now;
-            }
+        if (s.mode == MODE_SLIDE && !source[slider].valid)
             continue;
-        }
-
-        // LFO: swings from base to base + range, quantized to the nearest
-        // scale note if a scale is set, with a trigger on every new note
-        float volts = (s.base + lfoShape(slider, lfoPhase(slider)) * lfoDepth(slider) * s.range) / CENTS_PER_VOLT;
-        if (s.scale)
-        {
-            int semitone = nearestNote(SCALES[s.scale - 1], s.root, volts);
-            if (semitone != l.semitone && s.lfoGate == LFO_GATE_NOTE)
-                fireTrig(slider);
-            l.semitone = semitone;
-            volts = semitone / 12.0f;
-        }
-        int code = sliderVoltsToCode(slider, volts);
-        if (code != l.code)
-        {
-            setSliderDAC12(slider, code);
-            l.code = code;
+        int written = ctl[slider].code;
+        if (ctlOutput(slider) != written)
             l.writtenUs = now;
-        }
     }
+}
+
+static uint32_t resets = 0;
+
+void modesResetSliders()
+{
+    for (int slider = 0; slider < NUM_SLIDERS; slider++)
+    {
+        lastPosition[slider] = 0;
+        currentStep[slider] = -1;
+        float volts;
+        currentSemitone[slider] = slideTarget(slider, 0, volts);
+        glide[slider] = {volts, volts, volts, millis()};
+        ctlFill(slider, volts);
+        ctl[slider].touched = false;
+
+        Lfo &l = lfo[slider];
+        l.phase = 0;
+        l.position = 0;
+        l.slid = 1.0f;
+        l.depth = 1.0f;
+        l.pressure = l.earlier = 0;
+        l.value = random(1001) / 1000.0f;
+        l.semitone = -1;
+
+        if (sliderSettings[slider].mode == MODE_SLIDE)
+            ctlOutput(slider); // an LFO is written again by modesUpdate
+    }
+    resets++;
+}
+
+uint32_t modesResets()
+{
+    return resets;
 }
 
 bool modesRunning(int slider)
@@ -814,12 +968,42 @@ bool modesRunning(int slider)
 
 int modesOutputCode(int slider)
 {
-    return lfo[slider].code;
+    return ctl[slider].code;
 }
 
 int modesLfoLevel(int slider)
 {
+    const SliderSettings &s = sliderSettings[slider];
+    if (s.slewMs > 0 || s.delayMs > 0)
+        return modesOutputLevel(slider); // the waveform as CTRL changed it
     return lroundf(lfoShape(slider, lfoPhase(slider)) * lfoDepth(slider) * 1023.0f);
+}
+
+bool modesMoving(int slider)
+{
+    return sliderSettings[slider].mode == MODE_LFO || sliderSettings[slider].delayMs > 0;
+}
+
+bool modesShowsOutput(int slider)
+{
+    return sliderSettings[slider].mode == MODE_SLIDE && sliderSettings[slider].delayMs > 0;
+}
+
+int modesOutputLevel(int slider)
+{
+    const SliderSettings &s = sliderSettings[slider];
+    int cents = lroundf(glide[slider].volts * CENTS_PER_VOLT);
+    if (s.scale && s.mode == MODE_SLIDE)
+        return modesPositionOf(slider, cents); // the note's place, for the dot
+    if (s.range == 0)
+        return 0;
+    return constrain(lroundf((float)(cents - s.base) / s.range * 1023.0f), 0, 1023);
+}
+
+const char *freezeName(int freeze)
+{
+    static const char *NAMES[NUM_FREEZE] = {"off", "lift", "touch"};
+    return NAMES[constrain(freeze, 0, NUM_FREEZE - 1)];
 }
 
 bool modesShowsDot(int slider)
@@ -850,7 +1034,7 @@ const char *modesSliderText(int slider)
         snprintf(text, sizeof(text), "%s%u", NOTE_NAMES[semitone % 12], (unsigned)(semitone / 12) % 10);
     }
     else
-        snprintf(text, sizeof(text), "%.2fV", glide[slider].to);
+        snprintf(text, sizeof(text), "%.2fV", ctl[slider].x); // what the finger plays, before CTRL
     return text;
 }
 

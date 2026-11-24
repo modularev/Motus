@@ -20,7 +20,7 @@ The display shows the touched slider or pad with its value (a voltage, note or L
 | `SET 1`–`SET 4` | Result |
 |---|---|
 | Tap | open the settings page below; tap again to close it. In a step view or a row's settings, a tap on any SET pad closes it |
-| Double tap | start or stop sequencer row A–D (`SET 1` is row A), from anywhere |
+| Double tap | start or stop sequencer row A–D (`SET 1` is row A), from anywhere; the first tap acts as a tap at once, so its page opens (or a view closes) as well |
 | Hold (0.5 s) | open the step view of row A–D (see Sequencer); hold it there again for the row's settings |
 | With settings open: encoder | scroll through the settings |
 | With settings open: tap the same pad | close the settings |
@@ -33,14 +33,19 @@ A slot holds a patch: every slider's settings, the sequencer's stage values and 
 
 | Tap | Page | Settings |
 |---|---|---|
-| `SET 1` | SLIDER | the touched slider's settings: LFO off or on, then the settings of that mode (see Slider modes); hold `SET 1` and turn to choose the slider without touching it |
-| `SET 2` | SEQ | the sequencer: run, clock, tempo, touch |
-| `SET 4` | SYS | global settings, see below |
-| `FINE` | | tap: toggle small encoder steps for exact values (± on the display); double tap: start or stop all rows, from anywhere; hold and turn: change a setting's value |
+| `SET 1` | PLAY | how the finger plays the touched slider: LFO off or on, then the settings of that mode (see Slider modes) |
+| `SET 2` | OUT | the slider's output: QUANT, ROOT, BASE, RANGE |
+| `SET 3` | CTRL | the slider's output processing: SLEW, SLANT, DELAY, LOOP, FREEZE (see CTRL) |
+| `SET 4` | SEQ | the sequencer (run, clock, tempo, touch), followed by the SYS settings (see below): scroll past TOUCH, or turn back from RUN |
+
+On PLAY, OUT and CTRL, hold that page's SET pad and turn to choose the slider without touching it.
+| `FINE` | | tap: toggle small encoder steps for exact values (± on the display), until the menu closes; double tap: start or stop all rows, from anywhere; hold and turn: change a setting's value |
 | `SAVE` | | tap: `SAVE 2?`, turn the encoder to pick one of 4 slots, tap again to store (the second line says `replace`, `empty` or `current`) |
-| `LOAD` | | tap: `LOAD 2?`, pick the slot, tap again to load it. After the slots come four templates for a fresh start (`INIT?`): faders (8 plain 0–8 V faders), lfos (8 sine LFOs with clock gates, their phases spread 45° apart), keys (8 quantized keyboards, C major over two octaves) and split (4 keys, 4 LFOs 90° apart); a template also clears the sequencer and its values, and stays unsaved until you save it. A SET or `FINE` pad, or 5 s without input, cancels either prompt |
+| `LOAD` | | tap: `LOAD 2?`, pick the slot, tap again to load it. After the slots come four templates for a fresh start (`INIT?`): faders (8 plain 0–8 V faders), lfos (8 sine LFOs with clock gates, their phases spread 45° apart), keys (8 quantized keyboards, C major over two octaves) and split (4 keys, 4 LFOs 90° apart); a template also clears the sequencer and its values, starts every slider from the bottom (a fader at its BASE, LFOs from the start of their cycle), and stays unsaved until you save it. A SET or `FINE` pad, or 5 s without input, cancels either prompt |
 
 ### System settings
+
+The last eight settings on the `SET 4` page, after the sequencer's.
 
 | Setting | Values |
 |---|---|
@@ -51,7 +56,7 @@ A slot holds a patch: every slider's settings, the sequencer's stage values and 
 | BRIGHT | 10–100 %: LED brightness |
 | TRIG LEN | 1–20 ms: trigger length |
 | LOOP TRG | on or off: a gate held across a loop start drops briefly to retrigger |
-| AUTOSAVE | on (default) or off: after 10 s without touching anything, changes are saved into the current slot. Not after loading a template, until you SAVE or LOAD yourself |
+| AUTOSAVE | off (default) or on: after 10 s without touching anything, changes are saved into the current slot. Not after loading a template, until you SAVE or LOAD yourself |
 
 ### Sequencer
 
@@ -74,7 +79,7 @@ A step sequencer in the spirit of the Serge TKB: the 8 sliders are 8 stages, and
 
 Every stage holds a position within its row's range, like a slider's: touching a slider stores where you touched it, and the row's BASE, RANGE and QUANT turn that into the output. So changing them reshapes the whole row at once, while it plays, and the stages keep their shape (e.g. turn RANGE up to widen a melody, BASE to transpose it). While DIR, SHIFT or LEN is shown, the LEDs show the row's window; otherwise the row's values in its range. The keys template sets every row to C major over two octaves from C2; the others leave the rows unquantized over 0–8 V.
 
-**Sequencer** (tap `SET 2`):
+**Sequencer** (tap `SET 4`):
 
 | Setting | Values |
 |---|---|
@@ -86,31 +91,49 @@ Every stage holds a position within its row's range, like a slider's: touching a
 
 ### Slider modes
 
-Every slider has two modes, switched with LFO off or on at the top of its settings (tap `SET 1`), that share the same settings for their output range and quantizer:
+Every slider has two modes, switched with LFO off or on at the top of its PLAY page (tap `SET 1`), that share the same settings for their output range and quantizer (OUT, `SET 2`) and output processing (CTRL, `SET 3`):
 
 - **SLIDE**: the finger sets the output. Without a quantizer the output spans the voltage range, like a fader; with one it plays the scale notes in the range, like a keyboard strip (and, swept, an arpeggio).
-- **LFO**: the output runs an LFO, which keeps running after release; the finger sets its rate or, with CTRL depth, its depth.
+- **LFO**: the output runs an LFO, which keeps running after release; the finger sets its rate or, with SETS depth, its depth.
+
+**PLAY** (`SET 1`):
 
 | Setting | Modes | Values |
 |---|---|---|
 | LFO | both | off (SLIDE) or on (LFO) |
-| BASE | both | the output at the bottom of the slider, or the LFO's low point, in volts (with the note name when quantized) |
-| RANGE | both | from BASE to the top of the slider or the LFO's high point: volts, or semitones when quantized (24 st = two octaves); negative inverts |
-| QUANT | both | off, or a scale: chromatic, major, minor, major and minor pentatonic, dorian, harmonic minor, blues, whole tone (1 V/octave) |
-| ROOT | both | the key of the scale |
 | PLAY | SLIDE | slide (the output follows the finger) or touch (set where the finger lands; a second finger sets a new value) |
-| SLEW | SLIDE | glide between values, off to 10 s, continuing after release; coarse steps 5 ms … 10 s, about 1 % steps with `FINE` |
 | GATE | SLIDE | gate while touched, retrigger (a short drop on every new note) or trigger (on touch and every new note) |
 | SHAPE | LFO | sine and triangle start halfway and rise, ramp rises from BASE, saw falls to it, square starts high, S&H holds a new random level every cycle |
-| CTRL | LFO | what the slider sets: rate, or depth (bottom: none, top: the full BASE–RANGE swing; the screen shows the depth in %), and FREQ sets the rate |
+| SETS | LFO | what the slider sets: rate, or depth (bottom: none, top: the full BASE–RANGE swing; the screen shows the depth in %), and FREQ sets the rate |
 | RATE | LFO | slow 0.02–1 Hz, mid 0.2–5 Hz, fast 1–25 Hz, spread exponentially along the slider; or sync: the slider picks a cycle of 4 bars, 2 bars, 1 bar, 1/2, 1/4, 1/8, 1/16 or 1/32 at the sequencer tempo, restarting in phase when the sequencer starts |
-| FREQ | LFO | with CTRL depth: the rate within the RATE range (or the sync division) |
+| FREQ | LFO | with SETS depth: the rate within the RATE range (or the sync division) |
 | PHASE | LFO | 0–359°: an offset of the cycle, in 15° steps; the gate, triggers and LEDs follow it, and restarts keep it |
-| DEPTH | LFO | fixed, or set by pressure (held on release; with CTRL depth on top of the slider's); less depth stays closer to BASE |
+| DEPTH | LFO | fixed, or set by pressure (held on release; with SETS depth on top of the slider's); less depth stays closer to BASE |
 | RESET | LFO | free running, or restart on touch |
 | GATE | LFO | while touched, high for the first half of every cycle (a clock), a trigger at every cycle start, or a trigger on every new quantized note |
 
-BASE and RANGE step by octaves when quantized (semitones with `FINE`), otherwise by 1 V (0.1 V with `FINE`). Small steps go four times further when turning fast. Settings changes reach a held output at once. A little hysteresis keeps a resting finger from flickering between notes. Triggers are short pulses (TRIG LEN on the SYS page, 2 ms by default), timed by an interrupt independent of the sensor scan, and at least 10 ms apart, so one touch never fires twice. The LEDs show a bar, a dot at the note when quantized, or the LFO's waveform; the display shows the voltage, the note or the LFO rate.
+**OUT** (`SET 2`), both modes:
+
+| Setting | Values |
+|---|---|
+| QUANT | off, or a scale: chromatic, major, minor, major and minor pentatonic, dorian, harmonic minor, blues, whole tone (1 V/octave) |
+| ROOT | the key of the scale |
+| BASE | the output at the bottom of the slider, or the LFO's low point, in volts (with the note name when quantized) |
+| RANGE | from BASE to the top of the slider or the LFO's high point: volts, or semitones when quantized (24 st = two octaves); negative inverts |
+
+**CTRL** (`SET 3`), both modes: a CV processor after the mode, after the CONTROL modulator of the GRM Ateliers. The mode's output (the finger's value, or the LFO) goes through a delay line with feedback and then a slew. Only the position output is processed: gate and force stay live, so an echo plays against the finger's gate. With DELAY off and SLEW off the output passes straight through.
+
+| Setting | Values |
+|---|---|
+| SLEW | glide between values, off to 10 s, continuing after release; coarse steps 5 ms … 10 s, about 1 % steps with `FINE`. On an LFO it rounds off square and S&H steps (smooth random) |
+| SLANT | −100 … +100 %: rise time against fall time. 0 is symmetric; positive makes rises slower (up to twice SLEW) and falls faster (instant at +100 %), negative the other way round |
+| DELAY | off to 8 s: the output repeats the input this much later (1 ms resolution); coarse steps 10 ms … 8 s, about 1 % with `FINE` |
+| LOOP | 0–100 %: how much of the delayed output is fed back. Low values give echoes that fade into the held value, 100 % loops the last DELAY endlessly |
+| FREEZE | off; lift: while the slider is untouched, the last DELAY loops at 100 % (play a gesture, let go, and it repeats until the next touch); touch: it loops while the slider is touched (on an LFO: hold the slider to capture a stretch of the waveform) |
+
+A quantized slider is quantized again after the line, so echoes and loops stay in the scale, and the slew then glides between notes. A slider with a DELAY joins the master outputs like an LFO, since its output keeps moving after release, and its LEDs show the output rather than the finger.
+
+BASE and RANGE step by octaves when quantized (semitones with `FINE`), otherwise by 1 V (0.1 V with `FINE`). Small steps go four times further when turning fast. Settings changes reach a held output at once. A little hysteresis keeps a resting finger from flickering between notes. Triggers are short pulses (TRIG LEN in the SYS settings on `SET 4`, 2 ms by default), timed by an interrupt independent of the sensor scan, and at least 10 ms apart, so one touch never fires twice. The LEDs show a bar, a dot at the note when quantized, or the LFO's waveform; the display shows the voltage, the note or the LFO rate.
 
 ### Two fingers
 

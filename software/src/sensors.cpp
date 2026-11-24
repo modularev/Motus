@@ -92,6 +92,12 @@ static uint8_t historyHead[NUM_SENSORS];
 static uint8_t historyCount[NUM_SENSORS];
 static bool wasTouched[NUM_SENSORS] = {false};
 
+// A failed read keeps the last reading, so an I2C glitch does not end a touch;
+// only after this many failures in a row does the touch end.
+static const int MAX_FAILED_READS = 20;
+static TouchReading lastReading[NUM_SENSORS];
+static int failedReads[NUM_SENSORS];
+
 // The MPR121's own baseline follows a finger that approaches slowly, which
 // swallows the partial signal on neighbouring electrodes. So its tracking is
 // switched off and the baseline is kept here instead.
@@ -515,6 +521,17 @@ TouchReading sensorRead(int channel)
     uint16_t filtered[ELECTRODES_PER_SENSOR];
     selectSensor(channel);
     bool ok = readFiltered(filtered);
+    if (ok)
+        failedReads[channel] = 0;
+    else if (++failedReads[channel] <= MAX_FAILED_READS)
+    {
+        TouchReading held = lastReading[channel];
+        held.started = held.released = false;
+        held.liftMs = 0;
+        if (!held.touched)
+            held = reading; // untouched stays untouched
+        return held;
+    }
 
     int16_t touchStrength[ELECTRODES_PER_SENSOR];
     int strength = 0;
@@ -631,6 +648,7 @@ TouchReading sensorRead(int channel)
 #endif
     }
     wasTouched[channel] = reading.touched;
+    lastReading[channel] = reading;
 
 #ifdef MOTUS_DEBUG
     debugPrintConfig();

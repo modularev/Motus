@@ -6,6 +6,7 @@
 #include "config.h"
 #include "modes.h"
 #include "presets.h"
+#include "recorder.h"
 #include "sequencer.h"
 #include "system.h"
 
@@ -22,7 +23,8 @@ static const int SYSTEM_ADDRESS_V1 = SLOT_ADDRESS + NUM_SLOTS * SLOT_SIZE_V1;
 
 static const uint32_t DIRECTORY_MAGIC = 0x4D4F4432;    // "MOD2"
 static const uint32_t DIRECTORY_MAGIC_V1 = 0x4D4F4431; // "MOD1": slots of SLOT_SIZE_V1
-static const uint32_t SLOT_MAGIC = 0x4D4F5039;         // "MOP9"
+static const uint32_t SLOT_MAGIC = 0x4D4F5041;         // "MOPA": the slider settings packed, with CTRL
+static const uint32_t SLOT_MAGIC_V9 = 0x4D4F5039;      // "MOP9": the slider settings as in memory, without CTRL
 static const uint32_t SLOT_MAGIC_V8 = 0x4D4F5038;      // "MOP8": without the row speeds
 static const uint32_t SLOT_MAGIC_V7 = 0x4D4F5037;      // "MOP7": the stages in cents
 static const uint32_t SLOT_MAGIC_V6 = 0x4D4F5036;      // "MOP6": one quantizer for the rows
@@ -31,7 +33,8 @@ static const uint32_t SLOT_MAGIC_V4 = 0x4D4F5034;   // "MOP4": a length per row,
 static const uint32_t SLOT_MAGIC_V3 = 0x4D4F5033;   // "MOP3": one sequence length for all rows
 static const uint32_t SLOT_MAGIC_V2 = 0x4D4F5032;   // "MOP2": without the sequencer settings
 static const uint32_t SLOT_MAGIC_V1 = 0x4D4F5031;   // "MOP1": also the var presets as DAC values
-static const uint32_t SYSTEM_MAGIC = 0x4D4F5933;    // "MOY3"
+static const uint32_t SYSTEM_MAGIC = 0x4D4F5934;    // "MOY4": AUTOSAVE off by default
+static const uint32_t SYSTEM_MAGIC_V3 = 0x4D4F5933; // "MOY3": AUTOSAVE was on by default
 static const uint32_t SYSTEM_MAGIC_V2 = 0x4D4F5932; // "MOY2": without AUTOSAVE
 static const uint32_t LEGACY_MAGIC = 0x4D4F5431;    // "MOT1": the single save of earlier firmware
 
@@ -42,6 +45,7 @@ struct Directory
     uint8_t used[NUM_SLOTS];
 };
 
+// a patch in memory
 struct Slot
 {
     uint32_t magic;
@@ -49,7 +53,104 @@ struct Slot
     SliderSettings sliders[NUM_SLIDERS];
     SeqSettings sequencer;
 };
-static_assert(sizeof(Slot) <= SLOT_SIZE, "a slot does not fit its EEPROM space");
+
+// a slider's settings as stored: packed, so a slot still fits its 256 bytes
+struct __attribute__((packed)) StoredSlider
+{
+    uint8_t mode : 1, latch : 1, slideGate : 2, lfoRate : 2, lfoDepth : 2;
+    uint8_t lfoShape : 3, lfoReset : 1, lfoGate : 2, freeze : 2;
+    uint8_t scale : 4, root : 4;
+    uint8_t lfoFreq, lfoPhase;
+    int8_t slant;
+    uint8_t loop;
+    int16_t base, range;
+    uint16_t slewMs, delayMs;
+};
+
+// a patch as stored
+struct StoredSlot
+{
+    uint32_t magic;
+    uint16_t presets[NUM_PRESETS][NUM_VARS];
+    StoredSlider sliders[NUM_SLIDERS];
+    SeqSettings sequencer;
+};
+static_assert(sizeof(StoredSlot) <= SLOT_SIZE, "a slot does not fit its EEPROM space");
+
+// every earlier layout: the slider settings as they were in memory
+struct SlotV9
+{
+    uint32_t magic;
+    uint16_t presets[NUM_PRESETS][NUM_VARS];
+    SliderSettingsV9 sliders[NUM_SLIDERS];
+    SeqSettings sequencer;
+};
+
+static StoredSlot encode(const Slot &slot)
+{
+    StoredSlot stored;
+    memset(&stored, 0, sizeof(stored));
+    stored.magic = SLOT_MAGIC;
+    memcpy(stored.presets, slot.presets, sizeof(stored.presets));
+    for (int i = 0; i < NUM_SLIDERS; i++)
+    {
+        const SliderSettings &s = slot.sliders[i];
+        StoredSlider &p = stored.sliders[i];
+        p.mode = s.mode;
+        p.latch = s.latch;
+        p.slideGate = s.slideGate;
+        p.lfoRate = s.lfoRate;
+        p.lfoDepth = s.lfoDepth;
+        p.lfoShape = s.lfoShape;
+        p.lfoReset = s.lfoReset;
+        p.lfoGate = s.lfoGate;
+        p.freeze = s.freeze;
+        p.scale = s.scale;
+        p.root = s.root;
+        p.lfoFreq = s.lfoFreq;
+        p.lfoPhase = s.lfoPhase;
+        p.slant = s.slant;
+        p.loop = s.loop;
+        p.base = s.base;
+        p.range = s.range;
+        p.slewMs = s.slewMs;
+        p.delayMs = s.delayMs;
+    }
+    stored.sequencer = slot.sequencer;
+    return stored;
+}
+
+static void decodeStored(const StoredSlot &stored, Slot &slot)
+{
+    memset(&slot, 0, sizeof(slot));
+    slot.magic = SLOT_MAGIC;
+    memcpy(slot.presets, stored.presets, sizeof(slot.presets));
+    for (int i = 0; i < NUM_SLIDERS; i++)
+    {
+        const StoredSlider &p = stored.sliders[i];
+        SliderSettings &s = slot.sliders[i];
+        s.mode = p.mode;
+        s.latch = p.latch;
+        s.slideGate = p.slideGate;
+        s.lfoRate = p.lfoRate;
+        s.lfoDepth = p.lfoDepth;
+        s.lfoShape = p.lfoShape;
+        s.lfoReset = p.lfoReset;
+        s.lfoGate = p.lfoGate;
+        s.freeze = p.freeze;
+        s.scale = p.scale;
+        s.root = p.root;
+        s.lfoFreq = p.lfoFreq;
+        s.lfoPhase = p.lfoPhase;
+        s.slant = p.slant;
+        s.loop = p.loop;
+        s.base = p.base;
+        s.range = p.range;
+        s.slewMs = p.slewMs;
+        s.delayMs = p.delayMs;
+    }
+    slot.sequencer = stored.sequencer;
+}
 
 struct SystemStore
 {
@@ -75,6 +176,7 @@ static void migrateLayout();
 
 static void capture(Slot &slot)
 {
+    memset(&slot, 0, sizeof(slot)); // the padding too, as it is written to the EEPROM
     slot.magic = SLOT_MAGIC;
     presetsGetAll(slot.presets);
     memcpy(slot.sliders, sliderSettings, sizeof(slot.sliders));
@@ -97,10 +199,10 @@ void storageSetup()
     {
         SystemStore store;
         EEPROM.get(SYSTEM_ADDRESS, store);
-        if (store.magic == SYSTEM_MAGIC || store.magic == SYSTEM_MAGIC_V2)
+        if (store.magic == SYSTEM_MAGIC || store.magic == SYSTEM_MAGIC_V3 || store.magic == SYSTEM_MAGIC_V2)
             systemSettings = store.settings;
-        if (store.magic == SYSTEM_MAGIC_V2)
-            systemSettings.autosave = 1;
+        if (store.magic != SYSTEM_MAGIC)
+            systemSettings.autosave = 0; // off by default now, to spare the EEPROM
         savedSystem = systemSettings;
 
         modesDefaults();
@@ -145,7 +247,7 @@ void storageSave(int slot)
 {
     autosaveAllowed = true;
     capture(saved);
-    EEPROM.put(slotAddress(slot), saved);
+    EEPROM.put(slotAddress(slot), encode(saved));
     writeSystem();
 
     directory.used[slot] = 1;
@@ -153,27 +255,26 @@ void storageSave(int slot)
     EEPROM.put(DIRECTORY_ADDRESS, directory);
 }
 
-// a slot as stored, in any earlier layout, as the current one; earlier slots
-// have the same layout up to the sequencer settings
-static bool decodeSlot(const uint8_t *raw, Slot &slot)
+// a slot in an earlier layout, where the slider settings were stored as in
+// memory then, without CTRL; those layouts are the same up to the sequencer
+static bool decodeSlotV9(const uint8_t *raw, Slot &result)
 {
+    SlotV9 slot;
     memcpy(&slot, raw, sizeof(slot));
-    const uint8_t *sequencer = raw + offsetof(Slot, sequencer);
+    const uint8_t *sequencer = raw + offsetof(SlotV9, sequencer);
+    bool positions = false; // the stages are positions already, not cents
     switch (slot.magic)
     {
-    case SLOT_MAGIC:
-        return true;
+    case SLOT_MAGIC_V9:
+        positions = true;
+        break;
     case SLOT_MAGIC_V8:
     case SLOT_MAGIC_V7:
     {
         SeqSettingsV4 old;
         memcpy(&old, sequencer, sizeof(old));
         slot.sequencer = seqFromV4(old);
-        if (slot.magic == SLOT_MAGIC_V8)
-        {
-            slot.magic = SLOT_MAGIC; // the stages are positions already
-            return true;
-        }
+        positions = slot.magic == SLOT_MAGIC_V8;
         break;
     }
     case SLOT_MAGIC_V6:
@@ -212,8 +313,28 @@ static bool decodeSlot(const uint8_t *raw, Slot &slot)
         return false;
     }
     // the stages held cents: now positions in their rows' ranges
-    presetsCentsToPositions(slot.presets, slot.sequencer);
-    slot.magic = SLOT_MAGIC;
+    if (!positions)
+        presetsCentsToPositions(slot.presets, slot.sequencer);
+
+    memset(&result, 0, sizeof(result));
+    result.magic = SLOT_MAGIC;
+    memcpy(result.presets, slot.presets, sizeof(result.presets));
+    for (int i = 0; i < NUM_SLIDERS; i++)
+        result.sliders[i] = modesFromV9(slot.sliders[i]);
+    result.sequencer = slot.sequencer;
+    return true;
+}
+
+// a slot as stored, in any layout, as the current one
+static bool decodeSlot(const uint8_t *raw, Slot &result)
+{
+    uint32_t magic;
+    memcpy(&magic, raw, sizeof(magic));
+    if (magic != SLOT_MAGIC)
+        return decodeSlotV9(raw, result);
+    StoredSlot stored;
+    memcpy(&stored, raw, sizeof(stored));
+    decodeStored(stored, result);
     return true;
 }
 
@@ -233,7 +354,7 @@ static void migrateLayout()
     {
         Slot converted;
         if (directory.used[slot] && decodeSlot(raw[slot], converted))
-            EEPROM.put(slotAddress(slot), converted);
+            EEPROM.put(slotAddress(slot), encode(converted));
         else
             directory.used[slot] = 0;
     }
@@ -267,9 +388,13 @@ bool storageLoad(int slot)
 
 bool storageUnsaved()
 {
+    // field by field: the slot's padding bytes are not part of the patch
     Slot now;
     capture(now);
-    return memcmp(&now, &saved, sizeof(now)) != 0 || memcmp(&systemSettings, &savedSystem, sizeof(savedSystem)) != 0;
+    return memcmp(now.presets, saved.presets, sizeof(now.presets)) != 0 ||
+           memcmp(now.sliders, saved.sliders, sizeof(now.sliders)) != 0 ||
+           memcmp(&now.sequencer, &saved.sequencer, sizeof(now.sequencer)) != 0 ||
+           memcmp(&systemSettings, &savedSystem, sizeof(savedSystem)) != 0;
 }
 
 // Templates: fresh starting points, offered by LOAD after the slots
@@ -350,4 +475,6 @@ void storageLoadTemplate(int index)
         }
     }
     presetsSetAll(zero);
+    recorderReset();     // no loops or values left over from before
+    modesResetSliders();
 }
