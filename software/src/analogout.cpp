@@ -90,25 +90,31 @@ void setSliderDAC(int channel, int value_10bit)
 void setPressDAC(int channel, int value_9bit)
 {
     smoothedPressure[channel] = (smoothedPressure[channel] + (value_9bit << 3)) / 2;
-    value_9bit = smoothedPressure[channel];
-    if (value_9bit == writtenPressure[channel])
+    setModDAC12(channel, smoothedPressure[channel]);
+}
+
+// the force jacks, which a slider's MOD can also drive: 12 bit, written when it changes
+void setModDAC12(int channel, int value_12bit)
+{
+    int value = constrain(value_12bit, 0, 4095);
+    if (value == writtenPressure[channel])
         return;
-    writtenPressure[channel] = value_9bit;
+    writtenPressure[channel] = value;
 
     if (channel < 4)
     {
         selectDac(2);
-        dac.setChannelValue(static_cast<MCP4728_channel_t>(channel), value_9bit, MCP4728_VREF_INTERNAL);
+        dac.setChannelValue(static_cast<MCP4728_channel_t>(channel), value, MCP4728_VREF_INTERNAL);
     }
     else if (channel < 8)
     {
         selectDac(3);
-        dac.setChannelValue(static_cast<MCP4728_channel_t>(channel % 4), value_9bit, MCP4728_VREF_INTERNAL);
+        dac.setChannelValue(static_cast<MCP4728_channel_t>(channel % 4), value, MCP4728_VREF_INTERNAL);
     }
     else if (channel == 8 || channel == 9)
     {
         selectDac(5);
-        dac.setChannelValue(static_cast<MCP4728_channel_t>(channel - 6), value_9bit, MCP4728_VREF_INTERNAL);
+        dac.setChannelValue(static_cast<MCP4728_channel_t>(channel - 6), value, MCP4728_VREF_INTERNAL);
     }
 }
 

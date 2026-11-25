@@ -65,6 +65,12 @@ enum Setting
     SETTING_PAD_RATE,
     SETTING_PAD_CHAOS,
     SETTING_PAD_NONE, // a pad on OUT or TIME: it has nothing there
+    SETTING_MOD,      // OUT: what the mod jack puts out
+    SETTING_ENV_LEN,  // MOD env: its settings
+    SETTING_ENV_RISE,
+    SETTING_ENV_CURVE,
+    SETTING_ENV_HOLD,
+    SETTING_ENV_VEL,
 };
 #define COUNT(list) (int)(sizeof(list) / sizeof(list[0]))
 static const Setting PLAY_SLIDE[] = {SETTING_LFO, SETTING_PLAY, SETTING_SLIDE_GATE};
@@ -73,7 +79,18 @@ static const Setting PLAY_LFO[] = {SETTING_LFO, SETTING_SHAPE, SETTING_CTRL, SET
 // the slider sets the depth: FREQ sets the rate within the RATE range
 static const Setting PLAY_LFO_DEPTH[] = {SETTING_LFO, SETTING_SHAPE, SETTING_CTRL, SETTING_RATE, SETTING_FREQ, SETTING_PHASE,
                                          SETTING_DEPTH, SETTING_RESET, SETTING_LFO_GATE};
-static const Setting OUT_SETTINGS[] = {SETTING_QUANT, SETTING_ROOT, SETTING_BASE, SETTING_RANGE};
+// OUT: the cv's range and quantizer, then MOD, and with MOD env its settings
+// (HOLD and VEL only in SLIDE: an LFO sets the envelope off every cycle)
+static const Setting OUT_SETTINGS[] = {SETTING_QUANT, SETTING_ROOT, SETTING_BASE, SETTING_RANGE, SETTING_MOD};
+static const Setting OUT_ENV_SLIDE[] = {SETTING_QUANT, SETTING_ROOT, SETTING_BASE, SETTING_RANGE, SETTING_MOD,
+                                        SETTING_ENV_LEN, SETTING_ENV_RISE, SETTING_ENV_CURVE, SETTING_ENV_HOLD, SETTING_ENV_VEL};
+static const Setting OUT_ENV_LFO[] = {SETTING_QUANT, SETTING_ROOT, SETTING_BASE, SETTING_RANGE, SETTING_MOD,
+                                      SETTING_ENV_LEN, SETTING_ENV_RISE, SETTING_ENV_CURVE};
+// MOD's choices: QUAD only on an LFO
+static const ModSource MOD_SLIDE_CHOICES[] = {MOD_PRESS, MOD_ENV, MOD_INV};
+static const ModSource MOD_LFO_CHOICES[] = {MOD_PRESS, MOD_ENV, MOD_QUAD, MOD_INV};
+static const int ENV_LEN_COARSE_STEP = 4; // of 127: about 1.4 times longer per detent, 1 with fine steps
+static const int ENV_RISE_STEP = 10;      // %, 1 with fine steps
 static const Setting TIME_SETTINGS[] = {SETTING_SLEW, SETTING_SLANT, SETTING_DELAY, SETTING_LOOP, SETTING_FREEZE};
 // an XY pad selected: its settings are on PLAY
 static const Setting PAD_XY_SETTINGS[] = {SETTING_PAD_MODE};
@@ -199,8 +216,18 @@ static int pageSettings(Page p, const Setting *&list)
     switch (p)
     {
     case PAGE_OUT:
-        list = OUT_SETTINGS;
-        return COUNT(OUT_SETTINGS);
+        if ((s.mode == MODE_LFO ? s.modLfo : s.modSlide) != MOD_ENV)
+        {
+            list = OUT_SETTINGS;
+            return COUNT(OUT_SETTINGS);
+        }
+        if (s.mode == MODE_LFO)
+        {
+            list = OUT_ENV_LFO;
+            return COUNT(OUT_ENV_LFO);
+        }
+        list = OUT_ENV_SLIDE;
+        return COUNT(OUT_ENV_SLIDE);
     case PAGE_TIME:
         list = TIME_SETTINGS;
         return COUNT(TIME_SETTINGS);
@@ -446,6 +473,35 @@ static void change(int detents)
         {
         case SETTING_PAD_NONE:
             break;
+        case SETTING_MOD:
+        {
+            // through the mode's choices
+            bool lfo = s.mode == MODE_LFO;
+            const ModSource *choices = lfo ? MOD_LFO_CHOICES : MOD_SLIDE_CHOICES;
+            int count = lfo ? COUNT(MOD_LFO_CHOICES) : COUNT(MOD_SLIDE_CHOICES);
+            uint8_t &mod = lfo ? s.modLfo : s.modSlide;
+            int at = 0;
+            for (int i = 0; i < count; i++)
+                if (choices[i] == mod)
+                    at = i;
+            mod = choices[constrain(at + detents, 0, count - 1)];
+            break;
+        }
+        case SETTING_ENV_LEN:
+            stepSetting(s.envLength, detents * (fine ? fastFactor() : ENV_LEN_COARSE_STEP), 0, ENV_LENGTH_STEPS);
+            break;
+        case SETTING_ENV_RISE:
+            stepSetting(s.envRise, detents * (fine ? fastFactor() : ENV_RISE_STEP), 0, 100);
+            break;
+        case SETTING_ENV_CURVE:
+            s.envCurve = constrain(s.envCurve + detents * ENV_CURVE_STEP, -100, 100);
+            break;
+        case SETTING_ENV_HOLD:
+            stepSetting(s.envHold, detents, 0, 1);
+            break;
+        case SETTING_ENV_VEL:
+            stepSetting(s.envVel, detents, 0, 1);
+            break;
         case SETTING_PAD_MODE:
             stepSetting(padSettings[slider - NUM_SLIDERS].mode, detents, 0, NUM_PAD_MODES - 1);
             break;
@@ -643,6 +699,26 @@ static void formatSetting(char *bottom, size_t size, Setting setting, const Slid
         snprintf(bottom, size, "%8s", GATES[s.lfoGate % 4]);
         break;
     }
+    case SETTING_MOD:
+        snprintf(bottom, size, "%8s", modSourceName(s.mode == MODE_LFO ? s.modLfo : s.modSlide));
+        break;
+    case SETTING_ENV_LEN:
+        snprintf(bottom, size, "%s", envLengthText(s.envLength));
+        break;
+    case SETTING_ENV_RISE:
+        snprintf(bottom, size, "%6u %%", (unsigned)s.envRise % 1000);
+        break;
+    case SETTING_ENV_CURVE:
+        // "exp  50" / "linear" / "log  50"
+        if (s.envCurve == 0)
+            snprintf(bottom, size, "%8s", "linear");
+        else
+            snprintf(bottom, size, "%s %3d%%", s.envCurve > 0 ? "exp" : "log", abs((int)s.envCurve) % 1000);
+        break;
+    case SETTING_ENV_HOLD:
+    case SETTING_ENV_VEL:
+        snprintf(bottom, size, "%8s", (setting == SETTING_ENV_HOLD ? s.envHold : s.envVel) ? "on" : "off");
+        break;
     default: // the pads' settings, shown on their own
         break;
     }
@@ -654,7 +730,7 @@ static void show()
     // the LFO setting of what the slider sets shows as SETS
     static const char *SETTING_NAMES[] = {"QUANT", "ROOT", "BASE", "RANGE", "PLAY", "SLEW", "GATE", "SHAPE", "RATE", "DEPTH",
                                           "RESET", "GATE", "LFO", "PHASE", "SETS", "FREQ", "SLANT", "DELAY", "LOOP", "FREEZE",
-                                          "MODE", "RATE", "CHAOS", ""};
+                                          "MODE", "RATE", "CHAOS", "", "MOD", "LEN", "RISE", "CURVE", "HOLD", "VEL"};
     char top[9];
     char bottom[9];
     const SliderSettings &s = editedSlider();

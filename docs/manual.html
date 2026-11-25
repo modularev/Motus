@@ -142,7 +142,7 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
       </div>
       <p class="lede">Eight touch sliders, two XY pads, a <strong>four-row step sequencer</strong>, LFOs, quantizers and
         <strong>loop recording</strong>, played by finger and set up on an 8×2 character display.</p>
-      <img src="panel-labelled.png" alt="The Motus front panel: XY pads on the left, eight sliders with force, position and gate jacks, and on the right the master and sequencer jacks, the buttons A·PLAY, B·OUT, C·TIME and D·SEQ, the display, EDIT, REC, RUN, PATCH and the encoder" width="2481" height="1518">
+      <img src="panel-labelled.png" alt="The Motus front panel: XY pads on the left, eight sliders with mod, cv and gate jacks, and on the right the master and sequencer jacks, the buttons A·PLAY, B·OUT, C·TIME and D·SEQ, the display, EDIT, REC, RUN, PATCH and the encoder" width="2481" height="1518">
     </header>
 
     <!-- ============================================================ overview -->
@@ -155,9 +155,9 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
       <div class="tbl"><table class="wrap1">
         <thead><tr><th>Section</th><th>Jacks</th><th>What comes out</th></tr></thead>
         <tbody>
-          <tr><td>Sliders 1–8</td><td><span class="j">position</span> <span class="j">force</span> <span class="j">gate</span></td><td>the slider's output (a voltage, a note or an LFO), the finger's pressure, and a gate or trigger. The output holds its value after you lift.</td></tr>
+          <tr><td>Sliders 1–8</td><td><span class="j">cv</span> <span class="j">mod</span> <span class="j">gate</span></td><td>the slider's output (a voltage, a note or an LFO); a second output chosen with MOD (an envelope, the LFO 90° ahead, the cv mirrored, or the finger's pressure; see <a href="#mod">MOD</a>); and a gate or trigger. The output holds its value after you lift.</td></tr>
           <tr><td>XY pads 1–2</td><td><span class="j">X1 Y1 Z1</span><br><span class="j">X2 Y2 Z2</span></td><td>the finger's position on the pad, and its pressure (Z); or a Lorenz or Rössler attractor that the finger pulls on.</td></tr>
-          <tr><td>Master</td><td><span class="j">m.pos</span> <span class="j">m.force</span> <span class="j">m.gate</span></td><td>the average of all sliders that are touched, looping or running an LFO, so it always stays in range; it holds when none are. The gate is on while any slider gate is on, or gives the sequencer's step trigger while any row runs.</td></tr>
+          <tr><td>Master</td><td><span class="j">m.cv</span> <span class="j">m.mod</span> <span class="j">m.gate</span></td><td>the average cv and mod of all sliders that are touched, looping, running an LFO or delayed (m.mod also of envelopes still falling), so it always stays in range; it holds when none are. The gate is on while any slider gate is on, or gives the sequencer's step trigger while any row runs.</td></tr>
           <tr><td>Sequencer</td><td><span class="j">var 1–4</span></td><td>the four rows A–D of the step sequencer.</td></tr>
         </tbody>
       </table></div>
@@ -174,10 +174,12 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
         </tbody>
       </table></div>
       <p class="note">On the screen, the sequencer rows are called <b>A–D</b> (<kbd>A</kbd> and the <span class="j">var 1</span> jack above it are row A) and the sliders <b>#1–#8</b>, by their number on the panel.</p>
-      <p class="note">The buttons were relabelled after the first panel print with 6 mm tape strips (see
+      <p class="note">The buttons and jacks were relabelled after the first panel print with 6 mm tape strips (see
         <span class="j">docs/labels/</span>): <kbd>A·PLAY</kbd>–<kbd>D·SEQ</kbd> were <span class="v">SET 1</span>–<span class="v">SET 4</span>,
-        and <kbd>EDIT</kbd>, <kbd>REC</kbd>, <kbd>RUN</kbd>, <kbd>PATCH</kbd> were <span class="v">FINE</span>, <span class="v">HOLD</span>,
-        <span class="v">LOAD</span>, <span class="v">SAVE</span>.</p>
+        <kbd>EDIT</kbd>, <kbd>REC</kbd>, <kbd>RUN</kbd>, <kbd>PATCH</kbd> were <span class="v">FINE</span>, <span class="v">HOLD</span>,
+        <span class="v">LOAD</span>, <span class="v">SAVE</span>, and the jacks <span class="j">cv</span>, <span class="j">mod</span>,
+        <span class="j">m.cv</span>, <span class="j">m.mod</span> were <span class="v">position</span>, <span class="v">force</span>,
+        <span class="v">m.pos</span>, <span class="v">m.force</span>.</p>
     </section>
 
     <section id="start">
@@ -197,10 +199,12 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
       <h3>Sliders</h3>
       <p>Each slider follows your finger smoothly from bottom to top. Slow movements are smoothed, fast ones stay fast,
         and a resting finger can wobble a little without moving the output. When you lift, the value from just before
-        lifting is kept, so the output does not drift as the finger leaves. Pressing harder raises
-        <span class="j">force</span>; the position is compensated, so it stays nearly where it is.</p>
-      <p>The LEDs under a slider show its value as a bar, as a dot at the current note when it is quantized, or as the
-        moving waveform when it runs an LFO.</p>
+        lifting is kept, so the output does not drift as the finger leaves. Pressing harder raises the pressure
+        (on <span class="j">mod</span> when MOD is press, and the envelope's height with VEL); the position is
+        compensated, so it stays nearly where it is.</p>
+      <p>The LEDs under a slider show what its <span class="j">cv</span> jack puts out, after TIME, so a slew, an echo
+        or a frozen loop can be seen: a bar, a dot at the note when it is quantized, or the moving waveform when it runs
+        an LFO. The display shows what the finger plays.</p>
       <h3>Two fingers</h3>
       <p>Put a second finger on a slider or pad and the value jumps to it; lift it and the value jumps back. Lift the
         first finger instead and the value stays with the second, without the touch ending. Use it for square-wave
@@ -304,12 +308,27 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
           <tr><td>ROOT</td><td>the key of the scale</td></tr>
           <tr><td>BASE</td><td>the start of the range in volts, with the note name when quantized</td></tr>
           <tr><td>RANGE</td><td>the size of the range: volts, or semitones when quantized (<span class="v">24 st</span> = two octaves); negative inverts</td></tr>
+          <tr><td>MOD</td><td>what the <span class="j">mod</span> jack puts out (below). SLIDE: env (default), inv, press · LFO: quad (default), env, inv, press</td></tr>
+          <tr><td>LEN</td><td>env: the whole envelope, 1 ms – 20 s (400 ms to start with)</td></tr>
+          <tr><td>RISE</td><td>env: the rise's share of LEN, 0–100 % (10 %); the rest is the fall</td></tr>
+          <tr><td>CURVE</td><td>env: log 100 % … linear … exp 100 % (exp 50 %). Exponential rises start slowly; exponential falls drop fast and tail off</td></tr>
+          <tr><td>HOLD</td><td>env, SLIDE: on (default): it waits at the top while the finger stays down · off: it runs through</td></tr>
+          <tr><td>VEL</td><td>env, SLIDE: on (default): how firmly the touch lands sets how high it goes · off: always to the top</td></tr>
         </tbody>
       </table></div>
+      <h3 id="mod">MOD <small>the mod jack</small></h3>
+      <p>The second jack of every slider (<span class="v">force</span> on the original panel print) puts out one of four
+        things, 0–8 V:</p>
+      <div class="cards">
+        <div class="card"><h3>env</h3><p>An envelope after the PEAK modulator of the GRM Ateliers. In SLIDE it starts when the finger lands, and again on every new note when GATE is retrig or trig, rising from wherever it is, so it never clicks back to 0. In LFO mode it starts every cycle, as high as the LFO's depth.</p></div>
+        <div class="card"><h3>quad</h3><p>LFO only: the same LFO a quarter cycle ahead, with the same range, depth and quantizer. With the cv it draws a circle, or plays a second voice.</p></div>
+        <div class="card"><h3>inv</h3><p>The cv after TIME, mirrored within BASE and RANGE: when the cv is at the top, mod is at the bottom.</p></div>
+        <div class="card"><h3>press</h3><p>The finger's pressure, as the force jack always did.</p></div>
+      </div>
       <h3 id="time">TIME <small>tap C</small></h3>
       <p>A CV processor after the mode, after the CONTROL modulator of the GRM Ateliers, in both modes: the output
-        (the finger's value, or the LFO) runs through a delay line with feedback, then a slew. Only the position output
-        is processed; gate and force stay live. With DELAY and SLEW off the output passes straight through.</p>
+        (the finger's value, or the LFO) runs through a delay line with feedback, then a slew. Only the cv
+        is processed; gate and mod stay live. With DELAY and SLEW off the output passes straight through.</p>
       <div class="tbl"><table>
         <thead><tr><th>Setting</th><th>Values</th></tr></thead>
         <tbody>
@@ -321,7 +340,7 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
         </tbody>
       </table></div>
       <p class="note">A quantized slider is quantized again after the line, so echoes and loops stay in the scale. A slider
-        with a DELAY joins the master outputs like an LFO, and its LEDs show the output rather than the finger.</p>
+        with a DELAY joins the master outputs like an LFO.</p>
       <p class="note"><b>Steps when editing:</b> BASE and RANGE move by octaves when quantized (semitones with fine steps on),
         otherwise by 1 V (0.1 V with fine steps on). Small steps go four times further when you turn fast. Changes reach a held
         output at once.</p>
@@ -429,7 +448,7 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
     <section id="recording">
       <h2>Recording</h2>
       <p>Any slider or pad can record a movement and loop it, up to 20 seconds each, all at the same time. A slider
-        records position, force and gate, a pad X, Y and Z, including two-finger jumps, lifts and pauses, so rhythms loop too.</p>
+        records position, pressure and gate (so a loop plays the envelope too), a pad X, Y and Z, including two-finger jumps, lifts and pauses, so rhythms loop too.</p>
       <div class="tbl"><table class="wrap1">
         <thead><tr><th>Action</th><th>Result</th></tr></thead>
         <tbody>
@@ -455,7 +474,8 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
     <section id="saving">
       <h2>Saving and loading</h2>
       <p>Motus keeps four patch slots. A slot holds every slider's and pad's settings, the sequencer's stage values and its
-        settings, including every row's. The SYS settings are global and saved with every save. The unit starts with the
+        settings, including every row's. The SYS settings are global and saved with every save. Slots saved by earlier
+        firmware are not read: after an update that changes what a slot holds, the slots start empty. The unit starts with the
         slot saved or loaded last.</p>
       <p><b>Autosave</b> (off by default, switch it on in the SYS settings): after 10 seconds without touching anything, changes are saved into the current slot by
         themselves, and the <span class="v">*</span> disappears. After loading a
@@ -491,7 +511,7 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
         <tbody>
           <tr><td>SMOOTH</td><td>1 (light) to 10 (heavy): smoothing of slow finger movement; fast moves stay fast</td></tr>
           <tr><td>DEADBAND</td><td>0–20: how much a resting finger can wobble without moving the output</td></tr>
-          <tr><td>PRESSURE</td><td>50–200 %: how hard counts as a firm press, for force and Z</td></tr>
+          <tr><td>PRESSURE</td><td>50–200 %: how hard counts as a firm press, for pressure (mod, VEL, LFO depth) and Z</td></tr>
           <tr><td>TOUCH</td><td>50–200 %: touch sensitivity; higher reacts to lighter touches</td></tr>
           <tr><td>BRIGHT</td><td>10–100 %: LED brightness</td></tr>
           <tr><td>TRIG LEN</td><td>1–20 ms: the length of triggers</td></tr>

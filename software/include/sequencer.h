@@ -50,57 +50,6 @@ struct SeqSettings
     SeqRow rows[NUM_VARS];
 };
 
-// earlier saved layouts: one length and direction for all rows, then a
-// length per row, then one quantizer for the rows it applied to
-struct SeqSettingsV1
-{
-    uint8_t clock, div, dir, steps, touch, reserved;
-    uint16_t bpm;
-};
-struct SeqSettingsV2
-{
-    uint8_t clock, div, dir, touch;
-    uint8_t steps[NUM_VARS];
-    uint16_t bpm;
-};
-struct SeqRowV3
-{
-    uint8_t length : 3;
-    uint8_t start : 3;
-    uint8_t dir : 2;
-};
-struct SeqSettingsV3
-{
-    uint8_t clock, div, touch;
-    uint8_t scale : 4;
-    uint8_t root : 4;
-    uint16_t bpm;
-    SeqRowV3 rows[NUM_VARS];
-    uint8_t quantRows, reserved;
-};
-SeqSettings seqFromV1(const SeqSettingsV1 &old);
-SeqSettings seqFromV2(const SeqSettingsV2 &old);
-SeqSettings seqFromV3(const SeqSettingsV3 &old);
-
-// without the row speeds
-struct SeqRowV4
-{
-    uint8_t length : 3;
-    uint8_t start : 3;
-    uint8_t dir : 2;
-    uint8_t scale : 4;
-    uint8_t root : 4;
-    int16_t base;
-    int16_t range;
-};
-struct SeqSettingsV4
-{
-    uint8_t clock, div, touch, reserved;
-    uint16_t bpm;
-    SeqRowV4 rows[NUM_VARS];
-};
-SeqSettings seqFromV4(const SeqSettingsV4 &old);
-
 extern SeqSettings seqSettings;
 
 void sequencerDefaults();

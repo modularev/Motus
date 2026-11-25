@@ -69,58 +69,6 @@ float sequencerBeatSeconds()
     return 60.0f / constrain((int)seqSettings.bpm, 20, 300);
 }
 
-SeqSettings seqFromV4(const SeqSettingsV4 &old)
-{
-    SeqSettings s = DEFAULT_SETTINGS;
-    s.clock = old.clock;
-    s.div = old.div;
-    s.touch = old.touch;
-    s.bpm = old.bpm;
-    for (int row = 0; row < NUM_VARS; row++)
-    {
-        const SeqRowV4 &o = old.rows[row];
-        s.rows[row] = {o.length, o.start, o.dir, o.scale, o.root, o.base, o.range, 0, 0};
-    }
-    return s;
-}
-
-SeqSettings seqFromV3(const SeqSettingsV3 &old)
-{
-    SeqSettings s = DEFAULT_SETTINGS;
-    s.clock = old.clock;
-    s.div = old.div;
-    s.touch = old.touch;
-    s.bpm = old.bpm;
-    for (int row = 0; row < NUM_VARS; row++)
-    {
-        SeqRow &r = s.rows[row];
-        r.length = old.rows[row].length;
-        r.start = old.rows[row].start;
-        r.dir = old.rows[row].dir;
-        // the one quantizer goes to the rows it applied to
-        if (old.quantRows & (1 << row))
-        {
-            r.scale = old.scale;
-            r.root = old.root;
-        }
-    }
-    return s;
-}
-
-SeqSettings seqFromV2(const SeqSettingsV2 &old)
-{
-    SeqSettingsV3 v3 = {old.clock, old.div, old.touch, 0, 0, old.bpm, {}, 0, 0};
-    for (int row = 0; row < NUM_VARS; row++)
-        v3.rows[row] = {(uint8_t)(constrain((int)old.steps[row], 1, NUM_SLIDERS) - 1), 0, (uint8_t)(old.dir % NUM_SEQ_DIRECTIONS)};
-    return seqFromV3(v3);
-}
-
-SeqSettings seqFromV1(const SeqSettingsV1 &old)
-{
-    SeqSettingsV2 v2 = {old.clock, old.div, old.dir, old.touch, {old.steps, old.steps, old.steps, old.steps}, old.bpm};
-    return seqFromV2(v2);
-}
-
 int sequencerRowStep(int row)
 {
     return step[row];

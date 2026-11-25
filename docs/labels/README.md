@@ -1,31 +1,44 @@
-# Button labels
+# Panel labels
 
-Tape strips that relabel the eight touch buttons for the current firmware. They go over the old panel lettering:
+Tape strips that relabel the touch buttons and the jacks for the current firmware. They go over the old panel lettering:
 
-| Button | Old print | Label |
+| Where | Old print | Label |
 |---|---|---|
-| top row, under `var 1`–`var 4` | `SET 1`–`SET 4` | `A·PLAY` `B·OUT` `C·TIME` `D·SEQ` |
-| bottom row, under the display | `FINE` `HOLD` `LOAD` `SAVE` | `EDIT` `REC` `RUN` `PATCH` |
+| buttons, top row, under `var 1`–`var 4` | `SET 1`–`SET 4` | `A·PLAY` `B·OUT` `C·TIME` `D·SEQ` |
+| buttons, bottom row, under the display | `FINE` `HOLD` `LOAD` `SAVE` | `EDIT` `REC` `RUN` `PATCH` |
+| top jack of each slider | `force` | `mod` |
+| middle jack of each slider | `position` | `cv` |
+| master jacks | `m.force` `m.pos` | `m.mod` `m.cv` (`m.gate` and the slider `gate` jacks stay) |
 
-`../panel-labelled.png` shows the panel with the strips on.
+`../panel-labelled.png` shows the panel with every strip on, trimmed as described below.
 
 ## Files
 
-- `motus-labels-180dpi.png`: the strip to print. One pixel per printer dot (180 dpi), 32 dots high, which is the printable height of 6 mm tape on the PT-P700. Black pixels print. 8 labels of 9.5 mm, about 85 mm in all, with cut marks at the top and bottom edges between them.
-- `motus-labels-preview.png`: the same strip enlarged, as it comes out on white-on-black tape.
-- `make_labels.py`: makes all three images (`python3 docs/labels/make_labels.py`). Names, sizes and positions are at the top of the script.
+- `motus-buttons-180dpi.png`: 8 button labels of 9.5 mm, 85 mm in all. Capitals 2.3 mm high.
+- `motus-jacks-180dpi.png`: 18 jack labels of 12 mm (8 × `mod`, 8 × `cv`, `m.mod`, `m.cv`), 228 mm in all. Capitals 2.0 mm high, so they still fit after the jack labels are trimmed.
+- Both are one pixel per printer dot (180 dpi) and 32 dots high, the printable height of 6 mm tape on the PT-P700. Black pixels print. There are cut marks at the top and bottom edges between the labels.
+- `motus-*-preview.png`: the same strips enlarged, as they come out on white-on-black tape.
+- `make_labels.py`: makes all the images (`python3 docs/labels/make_labels.py`). Names, sizes and positions are in the script.
 
 ## Printing on the PT-P700
 
 - Tape: 6 mm TZe. White on black (TZe-315) matches the black panel.
-- Print the whole strip in one go. The printer feeds about 25 mm of blank tape before each print, so single labels waste tape.
+- Print each strip in one go. The printer feeds about 25 mm of blank tape before each print, so single labels waste tape.
 - The image must print at 100 %, one pixel per dot:
-  - **P-touch Editor (macOS)**: open a new 6 mm label, insert the PNG, and set its size to 84.9 × 4.5 mm (or its scale to 100 %) with the label length on auto. Set the margins to the smallest setting.
-  - **`ptouch-print`** (open source, works with the PT-P700 over USB): `ptouch-print --image motus-labels-180dpi.png`. Switch the printer's Editor Lite mode off first (its LED off), or it shows up as a USB drive instead of a printer.
-- Cut at the marks. Each label is 9.5 mm wide, and the buttons are 10.2–10.8 mm apart.
+  - **P-touch Editor (macOS)**: open a new 6 mm label, insert the PNG, and set its height to 4.5 mm (its width follows: 84.9 mm for the buttons, 227.8 mm for the jacks), or its scale to 100 %. Leave the label length on auto and set the margins to the smallest setting.
+  - **`ptouch-print`** (open source, works with the PT-P700 over USB): `ptouch-print --image motus-buttons-180dpi.png`. Switch the printer's Editor Lite mode off first (its LED off), or it shows up as a USB drive instead of a printer.
+- Cut at the marks.
 
-## Fitting
+## Trimming and fitting
 
-- **Bottom row:** there is 6.5 mm between the display frame and the buttons, so the 6 mm tape fits as it is.
-- **Top row:** there is only about 5.7 mm between the `var` jack rings and the buttons. Trim about 0.5 mm off the top edge of each label, or let the tape slightly overlap the top edge of the button. Touch still works through tape, but the trimmed version looks cleaner. The print is centered on the tape with about 0.75 mm free at each edge, so trimming 0.5 mm doesn't touch the letters.
-- Clean the panel with a little alcohol first. Then press each label on centered over the old text, which it covers completely (the old text is at most 7.1 mm wide).
+The lettering sits in the middle of the tape, inside its 4.5 mm printable band. So the tape can be trimmed evenly from both long edges without cutting into the letters:
+
+| Labels | Room on the panel | Trim the 6 mm tape to |
+|---|---|---|
+| bottom row of buttons (under the display) | 6.5 mm | nothing to trim |
+| top row of buttons (under `var 1`–`4`) | 5.7 mm | 5.6 mm: about 0.2 mm off each edge, or let it touch the button edge |
+| `m.mod`, `m.cv` (between the top line and the jacks) | 5.6 mm | 5.5 mm: 0.25 mm off each edge |
+| `mod` (between the top line and the jacks) | 5.4 mm | 5.3 mm: 0.35 mm off each edge |
+| `cv` (between the `mod` and `cv` jacks) | 4.4 mm | 4.3 mm: 0.85 mm off each edge, which leaves the 2 mm letters with 1.1 mm above and below |
+
+A metal ruler and a sharp blade on a cutting mat work better than scissors for the `cv` labels. Clean the panel with a little alcohol first. Then press each label on centered over the old text, which it covers completely.

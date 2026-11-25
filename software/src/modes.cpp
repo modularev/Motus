@@ -1,7 +1,6 @@
 #include "modes.h"
 
 #include <Arduino.h>
-#include <EEPROM.h>
 #include <Entropy.h>
 
 #include "analogout.h"
@@ -9,19 +8,11 @@
 #include "sequencer.h"
 #include "system.h"
 
-static const int STORAGE_ADDRESS = 128;           // the single save of earlier firmware
-static const uint32_t STORAGE_MAGIC = 0x4D4F5337; // "MOS7"
-static const uint32_t STORAGE_MAGIC_V6 = 0x4D4F5336; // "MOS6": the same fields up to range, the glide time as an index
-static const int V6_SIZE = 16;
-
 static const float NOTE_HYSTERESIS = 0.2f; // of a note step: a resting finger does not flicker between notes
 static const uint32_t RETRIGGER_MS = 5;    // gate low on a new note
 static const int MAX_SEMITONE = MAX_CENTS / SEMITONE_CENTS;
 static const int JUMP = 100;               // a position step this large is a second-finger jump: a new note in touch mode
 static const int MAX_NOTES = MAX_SEMITONE + 1;
-
-// glide times of the earlier settings, by index
-static const int OLD_SLEW_TIMES[9] = {0, 5, 10, 20, 50, 100, 200, 500, 1000};
 
 // LFO rate ranges: the slider spans its range exponentially, bottom to top.
 struct RateRange
@@ -81,112 +72,21 @@ static const ScaleInfo SCALES[NUM_SCALES] = {
 static const char *MODE_NAMES[NUM_MODES] = {"slide", "lfo"};
 static const char *NOTE_NAMES[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 
-static const SliderSettings DEFAULT_SETTINGS = {MODE_SLIDE, 0, 0, 0, 128, 0, LFO_SINE, 1, 0, 0, 0, 0, 0, 8 * CENTS_PER_VOLT, 0, 0, 0, 0, 0, 0};
+// MOD: an envelope in SLIDE (400 ms, a 10 % rise, held while touched, as
+// high as the touch is firm), the LFO 90 degrees ahead in LFO
+static const SliderSettings DEFAULT_SETTINGS = {MODE_SLIDE, 0, 0, 0, 128, 0, LFO_SINE, 1, 0, 0, 0, 0, 0, 8 * CENTS_PER_VOLT,
+                                                0, 0, 0, 0, 0, MOD_ENV, MOD_QUAD, 77, 10, 50, 1, 1};
 
-struct Storage // as saved by earlier firmware
-{
-    uint32_t magic;
-    SliderSettingsV9 settings[NUM_SLIDERS];
-};
-
-SliderSettings modesFromV9(const SliderSettingsV9 &o)
-{
-    SliderSettings s = DEFAULT_SETTINGS;
-    s.mode = o.mode;
-    s.scale = o.scale;
-    s.root = o.root;
-    s.latch = o.latch;
-    s.lfoFreq = o.lfoFreq;
-    s.slideGate = o.slideGate;
-    s.lfoShape = o.lfoShape;
-    s.lfoRate = o.lfoRate;
-    s.lfoDepth = o.lfoDepth;
-    s.lfoReset = o.lfoReset;
-    s.lfoGate = o.lfoGate;
-    s.lfoPhase = o.lfoPhase;
-    s.base = o.base;
-    s.range = o.range;
-    // SLEW was for SLIDE only: an LFO keeps its sharp edges
-    s.slewMs = o.mode == MODE_LFO ? 0 : o.slewMs;
-    return s;
-}
-
-// Settings as saved before BASE and RANGE (POS, NOTE and LFO modes). Older
-// layouts only have the first fields, the rest keep these defaults.
-struct OldSettings
-{
-    uint8_t mode; // 0 POS, 1 NOTE, 2 LFO
-    uint8_t scale, root, octave, range, retrigger, latch, slew;
-    uint8_t lfoShape, lfoRate, lfoLevel, lfoDepth, lfoReset, lfoGate, posGate, lfoScale;
-};
-static const OldSettings OLD_DEFAULTS = {0, SCALE_MAJOR, 0, 2, 2, 0, 0, 0, LFO_SINE, 1, 5, 0, 0, 0, 0, 0};
-
-struct OldLayout
-{
-    uint32_t magic;
-    int size; // bytes per slider
-};
-static const OldLayout OLD_LAYOUTS[] = {
-    {0x4D4F5335, 16}, // "MOS5"
-    {0x4D4F5334, 15}, // "MOS4": without the LFO quantizer
-    {0x4D4F5333, 14}, // "MOS3": without the POS gate setting
-    {0x4D4F5332, 8},  // "MOS2": without the LFO settings
-    {0x4D4F5331, 6},  // "MOS1": without latch and slew
-};
+static const float ENV_MIN_MS = 1.0f;     // LEN at its shortest
+static const float ENV_MAX_MS = 20000.0f; // and longest
+static const uint32_t VEL_WINDOW_MS = 30; // VEL: the firmest pressure this soon after the touch sets the height
+static const float VEL_LOWEST = 0.1f;     // even the lightest touch gives this much
+static const float MOD_FULL_VOLTS = 8.19f; // the force jacks at DAC value 4095
 
 SliderSettings sliderSettings[NUM_SLIDERS];
 
-// keep base + range inside the outputs
-static void clampRange(SliderSettings &s)
-{
-    s.base = constrain(s.base, 0, MAX_CENTS);
-    s.range = constrain(s.range, -s.base, MAX_CENTS - s.base);
-}
-
-// the old modes in the new language: POS and NOTE become SLIDE, OCT and
-// RANGE (or the LFO level) become BASE and RANGE
-static SliderSettings fromOld(const OldSettings &o)
-{
-    SliderSettings s = DEFAULT_SETTINGS;
-    s.root = o.root;
-    s.latch = o.latch;
-    s.slewMs = OLD_SLEW_TIMES[min((int)o.slew, 8)];
-    s.lfoShape = o.lfoShape;
-    s.lfoRate = o.lfoRate;
-    s.lfoDepth = o.lfoDepth;
-    s.lfoReset = o.lfoReset;
-    s.lfoGate = o.lfoGate;
-
-    switch (o.mode)
-    {
-    case 1: // NOTE
-        s.mode = MODE_SLIDE;
-        s.scale = o.scale + 1;
-        s.base = o.octave * CENTS_PER_VOLT + o.root * SEMITONE_CENTS;
-        s.range = o.range * CENTS_PER_VOLT;
-        s.slideGate = o.retrigger;
-        break;
-    case 2: // LFO
-        s.mode = MODE_LFO;
-        s.scale = o.lfoScale;
-        s.base = 0;
-        s.range = o.lfoLevel * CENTS_PER_VOLT;
-        break;
-    default: // POS
-        s.mode = MODE_SLIDE;
-        s.scale = 0;
-        s.base = 0;
-        s.range = MAX_CENTS;
-        s.slideGate = o.posGate ? SLIDE_GATE_TRIG : 0;
-        break;
-    }
-    clampRange(s);
-    return s;
-}
-
 static int currentStep[NUM_SLIDERS];
 static int currentSemitone[NUM_SLIDERS];
-static int noteCount[NUM_SLIDERS]; // notes in the slider's range, for the LED dot
 static uint32_t gateLowUntil[NUM_SLIDERS];
 static bool lastGate[NUM_SLIDERS];
 static int lastPosition[NUM_SLIDERS];
@@ -252,6 +152,28 @@ struct Ctl
     int code;        // DAC value written, -1 to write it again
 };
 static Ctl ctl[NUM_SLIDERS];
+
+// MOD's envelope, after Zadar's PEAK: it rises from where it is to its
+// height, waits there while the finger does (HOLD), and falls back to 0
+enum EnvStage : uint8_t
+{
+    ENV_IDLE,
+    ENV_RISE,
+    ENV_TOP,
+    ENV_FALL
+};
+struct Env
+{
+    EnvStage stage;
+    float level;      // 0-1, what goes out
+    float from;       // the level the stage started at
+    float height;     // 0-1: full, or from the pressure (VEL)
+    bool gate;        // the finger is down: a held envelope waits at the top
+    uint32_t startUs; // the stage began
+    uint32_t trigMs;  // the envelope was set off, for VEL
+    uint32_t writtenUs;
+};
+static Env env[NUM_SLIDERS];
 
 // Triggers are shorter than a sensor scan, so their gates are not written by
 // the main loop but by a timer interrupt, which switches them on and off on
@@ -409,47 +331,6 @@ void modesDefaults()
         sliderSettings[i] = DEFAULT_SETTINGS;
 }
 
-void modesLoadLegacy()
-{
-    Storage storage;
-    EEPROM.get(STORAGE_ADDRESS, storage);
-    if (storage.magic == STORAGE_MAGIC)
-    {
-        for (int i = 0; i < NUM_SLIDERS; i++)
-            sliderSettings[i] = modesFromV9(storage.settings[i]);
-        return;
-    }
-
-    // the previous layout: the same up to range, the glide time from its index
-    if (storage.magic == STORAGE_MAGIC_V6)
-    {
-        for (int i = 0; i < NUM_SLIDERS; i++)
-        {
-            sliderSettings[i] = DEFAULT_SETTINGS;
-            for (int b = 0; b < V6_SIZE; b++)
-                ((uint8_t *)&sliderSettings[i])[b] = EEPROM.read(STORAGE_ADDRESS + sizeof(uint32_t) + i * V6_SIZE + b);
-            sliderSettings[i].slewMs = OLD_SLEW_TIMES[min((int)sliderSettings[i].lfoFreq, 8)]; // the glide time was here
-            sliderSettings[i].lfoFreq = DEFAULT_SETTINGS.lfoFreq;
-        }
-        return;
-    }
-
-    // an older layout: converted, missing fields get defaults
-    int size = 0;
-    for (const OldLayout &layout : OLD_LAYOUTS)
-    {
-        if (storage.magic == layout.magic)
-            size = layout.size;
-    }
-    for (int i = 0; i < NUM_SLIDERS; i++)
-    {
-        OldSettings old = OLD_DEFAULTS;
-        for (int b = 0; b < size; b++)
-            ((uint8_t *)&old)[b] = EEPROM.read(STORAGE_ADDRESS + sizeof(uint32_t) + i * size + b);
-        sliderSettings[i] = size ? fromOld(old) : DEFAULT_SETTINGS;
-    }
-}
-
 static void ctlFill(int slider, float volts);
 
 void modesSetup()
@@ -525,7 +406,6 @@ static int quantize(int slider, int position)
 
     int notes[MAX_NOTES];
     int count = notesInRange(s, notes);
-    noteCount[slider] = count;
     if (count == 0)
     {
         currentStep[slider] = -1;
@@ -805,6 +685,166 @@ static float lfoDepth(int slider)
     return d;
 }
 
+// ---- MOD: the force jack
+
+static ModSource modSource(int slider)
+{
+    const SliderSettings &s = sliderSettings[slider];
+    ModSource source = (ModSource)(s.mode == MODE_LFO ? s.modLfo : s.modSlide);
+    if (source >= NUM_MOD_SOURCES || (source == MOD_QUAD && s.mode != MODE_LFO))
+        return MOD_PRESS;
+    return source;
+}
+
+static float envLengthMs(int length)
+{
+    return ENV_MIN_MS * powf(ENV_MAX_MS / ENV_MIN_MS, constrain(length, 0, ENV_LENGTH_STEPS) / (float)ENV_LENGTH_STEPS);
+}
+
+// CURVE: the stage's progress (0-1) bent: exponential rises start slowly and
+// falls drop fast with a long tail; logarithmic the other way round
+static float envCurve(int slider, float u)
+{
+    float bend = powf(4.0f, constrain((int)sliderSettings[slider].envCurve, -100, 100) / 100.0f);
+    return powf(constrain(u, 0.0f, 1.0f), bend);
+}
+
+// set off: it rises from where it is, so a new note never clicks down to 0 first
+static void envTrigger(int slider, bool gate, float height)
+{
+    Env &e = env[slider];
+    e.stage = ENV_RISE;
+    e.from = e.level;
+    e.height = height;
+    e.gate = gate;
+    e.startUs = micros();
+    e.trigMs = millis();
+}
+
+static void envStage(Env &e, EnvStage stage)
+{
+    e.stage = stage;
+    e.from = e.level;
+    e.startUs = micros();
+}
+
+static void envRun(int slider)
+{
+    const SliderSettings &s = sliderSettings[slider];
+    Env &e = env[slider];
+    float length = envLengthMs(s.envLength);
+    float riseMs = length * constrain((int)s.envRise, 0, 100) / 100.0f;
+    float fallMs = length - riseMs;
+    float ms = (micros() - e.startUs) / 1000.0f;
+    bool hold = s.envHold && s.mode == MODE_SLIDE;
+
+    if (e.stage == ENV_RISE)
+    {
+        if (ms >= riseMs)
+        {
+            e.level = e.height;
+            envStage(e, hold && e.gate ? ENV_TOP : ENV_FALL);
+            ms = 0;
+        }
+        else
+            e.level = e.from + (e.height - e.from) * envCurve(slider, ms / riseMs);
+    }
+    if (e.stage == ENV_TOP)
+    {
+        e.level = e.height;
+        if (!e.gate || !hold)
+            envStage(e, ENV_FALL);
+        ms = 0;
+    }
+    if (e.stage == ENV_FALL)
+    {
+        if (ms >= fallMs)
+        {
+            e.level = 0;
+            e.stage = ENV_IDLE;
+        }
+        else
+            e.level = e.from * envCurve(slider, 1.0f - ms / fallMs);
+    }
+}
+
+// the touch on a SLIDE slider: set off on landing, and on every new note when
+// the gate retriggers; VEL takes the firmest pressure of the touch's start
+static void envInput(int slider, bool gate, bool landed, bool newNote, int pressure)
+{
+    const SliderSettings &s = sliderSettings[slider];
+    Env &e = env[slider];
+    float press = constrain(pressure, 0, 511) / 511.0f;
+    float height = s.envVel ? max(press, VEL_LOWEST) : 1.0f;
+    if (landed || (gate && newNote && s.slideGate != 0))
+        envTrigger(slider, gate, height);
+    else if (gate && s.envVel && millis() - e.trigMs < VEL_WINDOW_MS)
+        e.height = max(e.height, height);
+    e.gate = gate;
+}
+
+// the DAC value MOD puts out, 12 bit
+static int modCode(int slider)
+{
+    const SliderSettings &s = sliderSettings[slider];
+    float volts;
+    switch (modSource(slider))
+    {
+    case MOD_ENV:
+        return lroundf(env[slider].level * 4095);
+    case MOD_QUAD:
+    {
+        // the LFO a quarter cycle ahead, over the same range and quantizer
+        float phase = lfoPhase(slider) + 0.25f;
+        volts = (s.base + lfoShape(slider, phase - floorf(phase)) * lfoDepth(slider) * s.range) / CENTS_PER_VOLT;
+        if (s.scale)
+            volts = nearestNote(SCALES[s.scale - 1], s.root, volts) / 12.0f;
+        break;
+    }
+    case MOD_INV:
+        // the cv, after TIME, mirrored within BASE and RANGE
+        volts = (2.0f * s.base + s.range) / CENTS_PER_VOLT - glide[slider].volts;
+        break;
+    default:
+        return 0;
+    }
+    return constrain(lroundf(volts / MOD_FULL_VOLTS * 4095), 0, 4095);
+}
+
+bool modesOwnsMod(int slider)
+{
+    return modSource(slider) != MOD_PRESS;
+}
+
+bool modesModMoving(int slider)
+{
+    ModSource source = modSource(slider);
+    return (source == MOD_ENV && env[slider].stage != ENV_IDLE) || source == MOD_QUAD ||
+           (source == MOD_INV && modesMoving(slider));
+}
+
+int modesModLevel(int slider)
+{
+    return modCode(slider) >> 3;
+}
+
+const char *modSourceName(int source)
+{
+    static const char *NAMES[NUM_MOD_SOURCES] = {"press", "env", "quad", "inv"};
+    return NAMES[constrain(source, 0, NUM_MOD_SOURCES - 1)];
+}
+
+const char *envLengthText(int length)
+{
+    static char text[9];
+    float ms = envLengthMs(length);
+    if (ms < 999.5f)
+        snprintf(text, sizeof(text), "%5u ms", (unsigned)lroundf(ms) % 1000);
+    else
+        snprintf(text, sizeof(text), "%6.2f s", ms / 1000);
+    return text;
+}
+
 bool modesGate(int slider, bool touchGate)
 {
     const SliderSettings &s = sliderSettings[slider];
@@ -853,6 +893,7 @@ int modesSliderOutput(int slider, int position, int pressure, bool &gate)
         gateRises[slider]++;
     if (usesTrig(s) && gate && (landed || newNote))
         fireTrig(slider);
+    envInput(slider, gate, landed, newNote, pressure);
     lastGate[slider] = gate;
     ctlRun(slider);
     int code = ctlOutput(slider);
@@ -887,6 +928,7 @@ void modesUpdate()
             if (lfoPhase(slider) < before)
             {
                 l.value = random(1001) / 1000.0f;
+                envTrigger(slider, false, lfoDepth(slider)); // MOD env: one per cycle
                 if (s.lfoGate == LFO_GATE_TRIG)
                     fireTrig(slider);
                 if (s.lfoGate == LFO_GATE_CYCLE)
@@ -900,7 +942,10 @@ void modesUpdate()
             {
                 int semitone = nearestNote(SCALES[s.scale - 1], s.root, volts);
                 if (semitone != l.semitone && s.lfoGate == LFO_GATE_NOTE)
+                {
                     fireTrig(slider);
+                    envTrigger(slider, false, lfoDepth(slider));
+                }
                 l.semitone = semitone;
                 volts = semitone / 12.0f;
             }
@@ -914,8 +959,16 @@ void modesUpdate()
             currentSemitone[slider] = slideTarget(slider, source[slider].position, ctl[slider].x);
         }
         ctlRun(slider);
+        envRun(slider);
 
-        // writes are spaced out to keep the I2C bus free for the sensors;
+        // writes are spaced out to keep the I2C bus free for the sensors
+        Env &e = env[slider];
+        if (modesOwnsMod(slider) && now - e.writtenUs >= OUTPUT_INTERVAL_US)
+        {
+            setModDAC12(slider, modCode(slider));
+            e.writtenUs = now;
+        }
+
         // a slider not played since power-up stays as it is
         if (now - l.writtenUs < OUTPUT_INTERVAL_US)
             continue;
@@ -949,6 +1002,8 @@ void modesResetSliders()
         l.pressure = l.earlier = 0;
         l.value = random(1001) / 1000.0f;
         l.semitone = -1;
+        env[slider].stage = ENV_IDLE;
+        env[slider].level = 0;
 
         if (sliderSettings[slider].mode == MODE_SLIDE)
             ctlOutput(slider); // an LFO is written again by modesUpdate
@@ -971,24 +1026,13 @@ int modesOutputCode(int slider)
     return ctl[slider].code;
 }
 
-int modesLfoLevel(int slider)
-{
-    const SliderSettings &s = sliderSettings[slider];
-    if (s.slewMs > 0 || s.delayMs > 0)
-        return modesOutputLevel(slider); // the waveform as TIME changed it
-    return lroundf(lfoShape(slider, lfoPhase(slider)) * lfoDepth(slider) * 1023.0f);
-}
-
 bool modesMoving(int slider)
 {
     return sliderSettings[slider].mode == MODE_LFO || sliderSettings[slider].delayMs > 0;
 }
 
-bool modesShowsOutput(int slider)
-{
-    return sliderSettings[slider].mode == MODE_SLIDE && sliderSettings[slider].delayMs > 0;
-}
-
+// where the cv lies in BASE-RANGE, after TIME (slew, delay, loop, freeze): what
+// the LEDs show, so they follow the jack, not the finger
 int modesOutputLevel(int slider)
 {
     const SliderSettings &s = sliderSettings[slider];
@@ -1010,14 +1054,6 @@ bool modesShowsDot(int slider)
 {
     const SliderSettings &s = sliderSettings[slider];
     return s.mode == MODE_SLIDE && s.scale;
-}
-
-int modesNotePosition(int slider)
-{
-    int count = max(noteCount[slider], 1);
-    int step = max(currentStep[slider], 0);
-    int position = lroundf((step + 0.5f) / count * 1023.0f);
-    return sliderSettings[slider].range < 0 ? 1023 - position : position;
 }
 
 const char *modesSliderText(int slider)

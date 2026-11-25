@@ -56,7 +56,7 @@ static const float STEP_VIEW_DIM = 0.3f;     // stages other than the current on
 static const float WINDOW_LEVEL = 0.4f;      // stages inside the window while shifting it
 static const float MARK_PASSING = 0.15f;     // the shown stage's top LED while the step passes through it
 
-// last position of every control, drawn by updateLeds
+// last position of every pad, drawn by updateLeds (sliders show their cv output)
 static int ledX[NUM_SENSORS];
 static int ledY[NUM_SENSORS];
 static bool padLit[NUM_SENSORS]; // pads stay dark until first touched
@@ -81,11 +81,11 @@ static void writeGate(int channel, bool gate)
 
 static void outputSlider(int channel, int position, int pressure, bool gate)
 {
-    ledX[channel] = position;
     int code = modesSliderOutput(channel, position, pressure, gate);
     masterInput[channel] = {true, code, pressure};
     writeGate(channel, gate);
-    setPressDAC(channel, pressure);
+    if (!modesOwnsMod(channel))
+        setPressDAC(channel, pressure); // MOD press; otherwise the modes write it
 }
 
 // x and y are pad-local; the outputs are as seen from the playing position.
@@ -197,7 +197,8 @@ static bool updateChannel(int channel)
         }
         bool gate = modesGate(channel, false);
         writeGate(channel, gate);
-        setPressDAC(channel, 0);
+        if (!modesOwnsMod(channel))
+            setPressDAC(channel, 0);
         masterInput[channel].active = false;
         return gate;
     }
@@ -226,7 +227,8 @@ static bool updateChannel(int channel)
         }
         bool gate = modesGate(channel, false);
         writeGate(channel, gate);
-        setPressDAC(channel, 0);
+        if (!modesOwnsMod(channel))
+            setPressDAC(channel, 0);
         masterInput[channel].active = false;
         return gate;
     }
@@ -311,14 +313,8 @@ static void updateLeds()
                 bool quantized = seqSettings.rows[row].scale != 0;
                 setSliderLED(channel, presetPosition(channel, row) >> 6, brightness, top, quantized);
             }
-            else if (modesRunning(channel))
-                setSliderLED(channel, modesLfoLevel(channel), brightness, top);
-            else if (modesShowsOutput(channel))
-                setSliderLED(channel, modesOutputLevel(channel), brightness, top, note); // TIME's delayed output
-            else if (note)
-                setSliderLED(channel, modesNotePosition(channel), brightness, top, true);
             else
-                setSliderLED(channel, ledX[channel], brightness, top);
+                setSliderLED(channel, modesOutputLevel(channel), brightness, top, note); // the cv jack, after TIME
         }
         else
             setXYPadLED(channel, ledX[channel], ledY[channel], padLit[channel] ? brightness : 0.0f, flash);
@@ -327,34 +323,45 @@ static void updateLeds()
 
 static void updateMaster()
 {
-    // after a reset of the sliders (a template), their LEDs and the master start from the bottom too
+    static int lastCode = 0, lastMod = 0; // what the master outputs hold
+
+    // after a reset of the sliders (a template), the master starts from the bottom too
     static uint32_t seenResets = 0;
     if (modesResets() != seenResets)
     {
         seenResets = modesResets();
         for (int i = 0; i < NUM_SLIDERS; i++)
-        {
-            ledX[i] = 0;
             masterInput[i] = {false, 0, 0};
-        }
+        lastCode = lastMod = 0;
         setMaster(0, 0);
     }
 
-    int count = 0;
-    long code = 0;
-    long pressure = 0;
+    // m.cv: the average of the sliders touched, looping, running an LFO or
+    // delayed; m.mod: of their MOD outputs, and of every MOD still moving on
+    // its own (an envelope falling after the lift); both hold when none are
+    int count = 0, modCount = 0;
+    long code = 0, mod = 0;
     for (int i = 0; i < NUM_SLIDERS; i++)
     {
-        // running LFOs and delayed sliders join the mix too
         bool running = modesMoving(i);
-        if (!masterInput[i].active && !running)
-            continue;
-        count++;
-        code += running ? modesOutputCode(i) : masterInput[i].code;
-        pressure += masterInput[i].pressure;
+        bool inMix = masterInput[i].active || running;
+        if (inMix)
+        {
+            count++;
+            code += running ? modesOutputCode(i) : masterInput[i].code;
+        }
+        if (modesOwnsMod(i) ? (inMix || modesModMoving(i)) : inMix)
+        {
+            modCount++;
+            mod += modesOwnsMod(i) ? modesModLevel(i) : masterInput[i].pressure;
+        }
     }
     if (count > 0)
-        setMaster(code / count, pressure / count);
+        lastCode = code / count;
+    if (modCount > 0)
+        lastMod = mod / modCount;
+    if (count > 0 || modCount > 0)
+        setMaster(lastCode, lastMod);
 }
 
 void loop()

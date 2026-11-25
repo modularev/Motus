@@ -19,7 +19,4 @@ struct SystemSettings
 
 extern SystemSettings systemSettings;
 
-// the single save of earlier firmware, read once when converting it
-void systemLoadLegacy();
-
 #endif

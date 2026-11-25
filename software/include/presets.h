@@ -35,11 +35,4 @@ void presetNudge(int preset, int var, int detents, int cents);
 void presetsGetAll(uint16_t values[][NUM_VARS]);
 void presetsSetAll(const uint16_t values[][NUM_VARS]);
 
-// the single save of earlier firmware, read once when converting it
-void presetsLoadLegacy();
-
-// earlier saves stored DAC values (0-4095), then cents: converted in place
-void presetsCodesToCents(uint16_t values[][NUM_VARS]);
-void presetsCentsToPositions(uint16_t values[][NUM_VARS], const SeqSettings &sequencer);
-
 #endif

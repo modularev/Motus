@@ -72,30 +72,38 @@ struct SliderSettings
     int8_t slant;      // -100..100 %: the slew's rise against its fall; -100 rises at once, +100 falls at once
     uint8_t loop;      // 0-100 %: how much of the delayed output is fed back; 100 loops it endlessly
     uint8_t freeze;    // the line loops at 100 %: 0 never, 1 while untouched, 2 while touched
-    uint8_t reserved;
     uint16_t delayMs;  // 0-8000 ms
+    // MOD, the second output (the force jack): pressure, an envelope, the cv
+    // mirrored, or in LFO mode the LFO 90 degrees ahead; one choice per mode
+    uint8_t modSlide;  // MOD_PRESS, MOD_ENV or MOD_INV
+    uint8_t modLfo;    // any ModSource
+    // the envelope (as Zadar's PEAK): set off by the gate
+    uint8_t envLength; // 0-127: the whole envelope, 1 ms to 20 s exponentially
+    uint8_t envRise;   // 0-100 %: the rise's share of the length
+    int8_t envCurve;   // -100..100 % in steps of 10: logarithmic, linear (0), exponential
+    uint8_t envHold;   // 1: it stays at the top while the finger does (attack, hold, release)
+    uint8_t envVel;    // 1: the pressure of the touch sets how high it goes
 };
+
+enum ModSource : uint8_t
+{
+    MOD_PRESS, // the finger's pressure
+    MOD_ENV,   // an envelope
+    MOD_QUAD,  // LFO only: the same LFO 90 degrees ahead
+    MOD_INV,   // the cv mirrored within its range
+    NUM_MOD_SOURCES
+};
+constexpr int ENV_LENGTH_STEPS = 127;
+constexpr int ENV_CURVE_STEP = 10;
 
 constexpr int MAX_SLEW_MS = 10000;
 constexpr int MAX_DELAY_MS = 8000;
 constexpr int NUM_FREEZE = 3; // off, lift, touch
 
-// the slider settings as saved before CTRL (slant, loop, freeze, delay), 18 bytes
-struct SliderSettingsV9
-{
-    uint8_t mode, scale, root, latch, lfoFreq, slideGate, lfoShape, lfoRate, lfoDepth, lfoReset, lfoGate, lfoPhase;
-    int16_t base;
-    int16_t range;
-    uint16_t slewMs;
-};
-SliderSettings modesFromV9(const SliderSettingsV9 &old);
-
 extern SliderSettings sliderSettings[];
 
 void modesSetup();
 
-// the single save of earlier firmware, read once when converting it
-void modesLoadLegacy();
 void modesDefaults();
 
 // call often (between sensor reads): glides keep moving after the finger
@@ -148,23 +156,29 @@ void modesSyncRestart();
 void modesResetSliders();
 uint32_t modesResets();
 
-// LFO: the output runs on its own; its current DAC value, and where it is
-// within its swing for the LEDs (10 bit)
+// LFO: the output runs on its own; its current DAC value
 bool modesRunning(int slider);
 int modesOutputCode(int slider);
-int modesLfoLevel(int slider);
 
 // TIME: a slider with a DELAY keeps moving after release, so it joins the
-// master like an LFO; its LEDs then show the output, not the finger: where
-// the output lies in its range, 10 bit
+// master like an LFO
 bool modesMoving(int slider);
-bool modesShowsOutput(int slider);
+
+// what the LEDs show: where the cv lies in BASE-RANGE after TIME, 10 bit; for
+// a quantized SLIDE slider, the place of its note, drawn as a dot
 int modesOutputLevel(int slider);
 const char *freezeName(int freeze);
 
-// quantized SLIDE: the LEDs show a dot at the current note, 10 bit
+// MOD, the force jack: unless it is the pressure, the modes write it (an
+// envelope, the LFO 90 degrees ahead, the cv mirrored); modesModMoving while
+// it moves on its own, so the master follows it; its level 0-511 like a pressure
+bool modesOwnsMod(int slider);
+bool modesModMoving(int slider);
+int modesModLevel(int slider);
+const char *modSourceName(int source);
+const char *envLengthText(int length); // LEN, "  400 ms" or "  2.50 s"
+
 bool modesShowsDot(int slider);
-int modesNotePosition(int slider);
 
 // value for the play screen: the note, the voltage or the LFO rate
 const char *modesSliderText(int slider);
