@@ -129,6 +129,7 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
       <li><a href="#recording">Recording</a></li>
       <li><a href="#saving">Saving &amp; loading</a></li>
       <li><a href="#system">System settings</a></li>
+      <li><a href="#patches">Patch ideas</a></li>
       <li><a href="#quickref">Quick reference</a></li>
       <li><a href="#specs">Specifications</a></li>
     </ol>
@@ -347,10 +348,10 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
       <p class="note"><b>Gates and triggers:</b> triggers are short pulses (TRIG LEN in the SYS settings, 2 ms by default), at
         least 10 ms apart, so one touch never fires twice.</p>
 
-      <h3 id="padsettings">XY pad settings <small>select a pad, tap A</small></h3>
-      <p>Touch a pad to select it, or with PLAY open hold <kbd>A</kbd> and turn past slider 8 to <span class="v">P1</span> and
-        <span class="v">P2</span>. Its settings are on PLAY (<span class="v">P1 MODE</span> over <span class="v">lorenz</span>);
-        OUT and TIME have nothing for a pad and say <span class="v">on PLAY</span>.</p>
+      <h3 id="padsettings">XY pad settings <small>select a pad, tap A, B, C</small></h3>
+      <p>Touch a pad to select it, or hold the open page's button and turn past slider 8 to <span class="v">P1</span> and
+        <span class="v">P2</span>. Its settings sit on the same pages as a slider's: PLAY its mode, OUT its quantizer and
+        ranges, TIME its slew (<span class="v">P1 MODE</span> over <span class="v">lorenz</span>).</p>
       <div class="tbl"><table>
         <thead><tr><th>Setting</th><th>Values</th></tr></thead>
         <tbody>
@@ -360,14 +361,22 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
           <tr><td>RATE</td><td>how fast it runs, in loops per second: 0.010–20 Hz (0.45 Hz to start with)</td></tr>
           <tr><td>CHAOS</td><td>0–100 %. lorenz: from long spirals with rare flips to frequent, erratic flips (rho 24.8–60) ·
             rossler: from one clean loop through period doubling (about 25 %) to dense chaos; the classic attractor is near 50 % (c 2.5–9)</td></tr>
+          <tr><td>QUANT, ROOT</td><td>OUT: a scale and its key, as a slider's; the axes it applies to play notes</td></tr>
+          <tr><td>AXES</td><td>OUT: which axes QUANT snaps: x, y or x+y (default)</td></tr>
+          <tr><td>XBASE, XRNG, YBASE, YRNG</td><td>OUT: each axis' range, as a slider's BASE and RANGE: where the left (bottom) and right (top) edges put the output. 0–8.17 V to start with</td></tr>
+          <tr><td>SLEW</td><td>TIME: off, or 1 ms – 10 s for X and Y to glide to a new value; they keep gliding after you lift</td></tr>
         </tbody>
       </table></div>
       <p>While an attractor runs, <b>the finger pulls the trajectory toward itself, and pressure sets how hard</b>: a light
         touch nudges it, a firmer one bends it toward the finger, and from about half pressure up it is drawn under the
         finger, pinned at a firm press however fast it runs. Lift, and it flies back onto the attractor from where you
         left it. The outputs and the pad's LEDs follow the trajectory all the time, touched or not.</p>
+      <p>QUANT, the ranges and SLEW shape X and Y in every mode, so a quantized attractor plays a chaotic melody in the
+        scale, and a pad in xy mode becomes a two-dimensional keyboard. Z is left as it is. The LEDs and the screen show
+        the outputs (<span class="v">P1 X C#3</span> over <span class="v">   Y2.08</span>).</p>
       <p class="note">The nudge of a light touch is measured against the attractor's own speed, so it feels the same at
-        any RATE. Held far off the attractor, the third output can run to the end of its range (Rössler's Z with the
+        any RATE. The X and Y jacks are not calibrated like the sliders', so quantized notes there can be slightly off
+        pitch. Held far off the attractor, the third output can run to the end of its range (Rössler's Z with the
         finger to the right); it comes back once you let go. A loop recorded on the pad records the finger, so it keeps
         pulling on an attractor that never repeats exactly.</p>
     </section>
@@ -519,6 +528,25 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
           <tr><td>AUTOSAVE</td><td>off (default) or on: save changes into the current slot after 10 s untouched</td></tr>
         </tbody>
       </table></div>
+    </section>
+
+    <!-- ============================================================ patch ideas -->
+    <section id="patches">
+      <h2>Patch ideas</h2>
+      <p>Starting points that use the settings above. Each one names the jacks to patch and what to set; everything not
+        mentioned stays as the template or the defaults leave it.</p>
+      <div class="cards">
+        <div class="card"><h3>1 · Keyboard with its own envelope</h3><p>Every key plays a note and shapes it, and how firmly you land sets how loud.</p><p><b>Patch:</b> <span class="j">cv</span> → oscillator pitch · <span class="j">mod</span> → VCA (or filter) · <span class="j">gate</span> free</p><p><b>Set:</b> Load the <span class="v">keys</span> template. PLAY: GATE retrig. OUT: MOD env, LEN 600 ms, RISE 5 %, HOLD on, VEL on.</p></div>
+        <div class="card"><h3>2 · Gesture looper on a filter</h3><p>Draw a filter sweep, lift, and it keeps playing exactly that until you touch again.</p><p><b>Patch:</b> <span class="j">cv</span> → filter cutoff</p><p><b>Set:</b> Load <span class="v">faders</span>. TIME on slider 1: DELAY 2000 ms, LOOP 0 %, FREEZE lift, SLEW off. Fill the whole two seconds with your gesture: the LEDs show the loop running.</p></div>
+        <div class="card"><h3>3 · Melody that answers itself</h3><p>Short phrases echo back, fading toward the last note you played, and stay in the scale.</p><p><b>Patch:</b> <span class="j">cv</span> → oscillator pitch, into a VCA that stays open (or a drone)</p><p><b>Set:</b> <span class="v">keys</span> template. TIME: DELAY 375 ms, LOOP 60 %, FREEZE off, SLEW 20 ms for a little glide between the echoes.</p></div>
+        <div class="card"><h3>4 · Circles and stereo motion</h3><p>One slider gives two LFOs a quarter cycle apart: a circle on a scope, a sound that turns in stereo.</p><p><b>Patch:</b> <span class="j">cv</span> → left VCA or pan · <span class="j">mod</span> → right</p><p><b>Set:</b> <span class="v">lfos</span> template (MOD is quad). The finger sets the rate; with PLAY DEPTH press, pressure sets how wide the circle is.</p></div>
+        <div class="card"><h3>5 · Chaotic melody you can steer</h3><p>A Lorenz attractor plays a pentatonic line that never repeats; press to hold it in one region, lift to let it fly.</p><p><b>Patch:</b> <span class="j">X1</span> → oscillator pitch · <span class="j">Y1</span> → filter cutoff · <span class="j">Z1</span> → wavefolder or VCA</p><p><b>Set:</b> Pad 1, PLAY: MODE lorenz, RATE 1.5 Hz, CHAOS 50 %. OUT: QUANT min pent, ROOT A, AXES x, XBASE A1 (with fine steps), XRNG 24 st, YRNG 5 V. TIME: SLEW 15 ms for a slight portamento.</p></div>
+        <div class="card"><h3>6 · Rössler accents</h3><p>A loop that is almost regular, with a spike now and then: an accent pattern with a mind of its own.</p><p><b>Patch:</b> <span class="j">Z2</span> → VCA or envelope amount · <span class="j">X2</span> → bass pitch</p><p><b>Set:</b> Pad 2: MODE rossler, CHAOS 25 % (period doubling), RATE to taste. OUT: QUANT minor, AXES x, XRNG 12 st. Raise CHAOS for less predictable accents.</p></div>
+        <div class="card"><h3>7 · A clock you play by finger</h3><p>The sequencer follows an LFO on slider 3, so sliding speeds up or slows down the whole sequence.</p><p><b>Patch:</b> <span class="j">var 1</span> → oscillator pitch · <span class="j">m.gate</span> → envelope · <span class="j">mod 3</span> → filter</p><p><b>Set:</b> <span class="v">lfos</span> template. D·SEQ: CLOCK #3 (every cycle of slider 3 is a step). Write a few stages into row A (hold A, touch sliders), then tap RUN.</p></div>
+        <div class="card"><h3>8 · Crossfader</h3><p>One slider fades between two sources: as one rises, the other falls.</p><p><b>Patch:</b> <span class="j">cv</span> → VCA of source 1 · <span class="j">mod</span> → VCA of source 2</p><p><b>Set:</b> <span class="v">faders</span> template. OUT: MOD inv. With a SLEW on TIME the crossfade glides; with DELAY and FREEZE lift it loops a fade gesture.</p></div>
+        <div class="card"><h3>9 · Slow-motion XY</h3><p>Tap a spot and both outputs glide there over seconds: a two-dimensional portamento for morphing filters or wavetables.</p><p><b>Patch:</b> <span class="j">X1</span> → wavetable position · <span class="j">Y1</span> → filter · <span class="j">Z1</span> → VCA</p><p><b>Set:</b> Pad 1: MODE xy. TIME: SLEW 2 s. Tap, wait, tap elsewhere; a second finger jumps the target while the outputs still travel.</p></div>
+        <div class="card"><h3>10 · Swells and drones</h3><p>A held key fades in slowly and fades out when you lift: string-like swells under a melody.</p><p><b>Patch:</b> <span class="j">cv</span> → pitch of a second voice · <span class="j">mod</span> → its VCA</p><p><b>Set:</b> Any slider. OUT: QUANT major, MOD env, LEN 6 s, RISE 50 %, CURVE log 50 %, HOLD on, VEL off. Slide to another note and the swell carries on; lift and touch again for a new one, which rises from wherever the last has fallen to.</p></div>
+      </div>
     </section>
 
     <!-- ============================================================ quick reference -->

@@ -149,13 +149,19 @@ BASE and RANGE step by octaves when quantized (semitones with fine steps), other
 
 ### XY pads
 
-A pad either follows the finger (`xy`) or runs a chaotic attractor (`lorenz`, `rossler`) that moves on its own. Select the pad (touch it, or with PLAY open hold `A` and turn past slider 8) and open PLAY (`A`); OUT and TIME have nothing for a pad (`on PLAY`):
+A pad either follows the finger (`xy`) or runs a chaotic attractor (`lorenz`, `rossler`) that moves on its own. Select the pad (touch it, or hold the open page's button and turn past slider 8 to `P1`, `P2`); its settings sit on the same three pages as a slider's:
 
 | Setting | Values |
 |---|---|
 | MODE | `xy`: X, Y and Z follow the finger, as before. `lorenz`: X and Y draw the butterfly (x against z), Z is y, swinging around its middle; the trajectory circles one wing and flips to the other at irregular times. `rossler`: X and Y draw the spiral (x against y), Z is z, low most of the time with a spike once a loop or so |
 | RATE | how fast it runs, in loops per second: 0.010–20 Hz, exponential (fine steps: 1 of 100, else 5). Default 0.45 Hz |
 | CHAOS | 0–100 %. `lorenz`: rho from 24.8 (long spirals, rare flips) to 60 (frequent, erratic flips). `rossler`: c from 2.5 (a single clean loop) through period doubling (about 25 %) to dense chaos; the classic attractor is near 50 % |
+| QUANT, ROOT (OUT, `B`) | a scale and its key, as a slider's: the axes it applies to play notes, with a little hysteresis so a resting finger does not flicker |
+| AXES (OUT) | which axes QUANT snaps: `x`, `y` or `x+y` (default) |
+| XBASE, XRNG, YBASE, YRNG (OUT) | each axis' range, as a slider's BASE and RANGE: where the left (bottom) edge and the right (top) edge put the output. Default 0–8.17 V. In octaves (semitones with fine steps) when quantized, else 1 V (0.1 V) |
+| SLEW (TIME, `C`) | off, or 1 ms – 10 s: X and Y glide to a new value, and keep gliding after the lift |
+
+QUANT, the ranges and SLEW shape X and Y in every mode, so a quantized attractor plays a chaotic melody in the scale. Z is left as it is: the pressure, or the attractor's third variable. The pad's LEDs and the screen (`P1 X C#3` over `   Y2.08`) show the outputs, after the range, quantizer and slew. The X and Y outputs are not calibrated like the sliders', so quantized notes can be slightly off pitch.
 
 With an attractor running, the finger pulls the trajectory toward itself, and pressure sets how hard: a light touch nudges it (relative to its own speed, so the same at any RATE), a firmer one bends it toward the finger, and from about half pressure up it is drawn under the finger, pinned at a firm press however fast it runs. Lift and it flies back onto the attractor from where you left it. Held far off the attractor, the third variable can run to the end of its range (Rössler's z with x held to the right); it comes back once released. The outputs follow the trajectory all the time, touched or not, and the pad's LEDs glow where it is. A recorded loop on the pad records the finger, so the loop keeps pulling on an attractor that never repeats exactly. Saved with the slot; a template sets both pads back to `xy`.
 

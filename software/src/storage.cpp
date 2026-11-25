@@ -15,12 +15,12 @@
 // not read: a new layout starts with empty slots and the default settings.
 static const int DIRECTORY_ADDRESS = 0;
 static const int SLOT_ADDRESS = 16;
-static const int SLOT_SIZE = 256;
+static const int SLOT_SIZE = 263; // the SYS settings end at the last byte
 static const int SYSTEM_ADDRESS = SLOT_ADDRESS + NUM_SLOTS * SLOT_SIZE;
 static const int EEPROM_SIZE = 1080; // Teensy 4.0
 
-static const uint32_t DIRECTORY_MAGIC = 0x4D4F4433; // "MOD3"
-static const uint32_t SLOT_MAGIC = 0x4D4F5043;      // "MOPC": with MOD and the envelope
+static const uint32_t DIRECTORY_MAGIC = 0x4D4F4434; // "MOD4": slots of 263 bytes
+static const uint32_t SLOT_MAGIC = 0x4D4F5044;      // "MOPD": with the pads' quantizer, ranges and slew
 static const uint32_t SYSTEM_MAGIC = 0x4D4F5934;    // "MOY4"
 
 struct Directory
@@ -41,7 +41,7 @@ struct Slot
 };
 
 // a slider's settings as stored: every field in the bits it needs, so a slot
-// fits its 256 bytes
+// fits its bytes
 struct __attribute__((packed)) StoredSlider
 {
     uint8_t lfoFreq, lfoPhase;
@@ -54,6 +54,14 @@ struct __attribute__((packed)) StoredSlider
 };
 static_assert(sizeof(StoredSlider) == 17, "a slider is stored in 17 bytes");
 
+// a pad's settings as stored: BASE and RANGE in steps of PAD_CENTS_STEP
+struct __attribute__((packed)) StoredPad
+{
+    uint32_t mode : 2, rate : 7, chaos : 7, scale : 4, root : 4, axes : 2, slew : 7, xBase : 9, yBase : 9;
+    int32_t xRange : 10, yRange : 10;
+};
+static_assert(sizeof(StoredPad) == 9, "a pad is stored in 9 bytes");
+
 // a patch as stored
 struct __attribute__((packed)) StoredSlot
 {
@@ -61,7 +69,7 @@ struct __attribute__((packed)) StoredSlot
     uint16_t presets[NUM_PRESETS][NUM_VARS];
     StoredSlider sliders[NUM_SLIDERS];
     SeqSettings sequencer;
-    PadSettings pads[NUM_PADS];
+    StoredPad pads[NUM_PADS];
 };
 static_assert(sizeof(StoredSlot) <= SLOT_SIZE, "a slot does not fit its EEPROM space");
 
@@ -103,7 +111,22 @@ static StoredSlot encode(const Slot &slot)
         p.envCurve = s.envCurve / ENV_CURVE_STEP;
     }
     stored.sequencer = slot.sequencer;
-    memcpy(stored.pads, slot.pads, sizeof(stored.pads));
+    for (int i = 0; i < NUM_PADS; i++)
+    {
+        const PadSettings &s = slot.pads[i];
+        StoredPad &p = stored.pads[i];
+        p.mode = s.mode;
+        p.rate = s.rate;
+        p.chaos = s.chaos;
+        p.scale = s.scale;
+        p.root = s.root;
+        p.axes = s.axes;
+        p.slew = s.slew;
+        p.xBase = s.xBase / PAD_CENTS_STEP;
+        p.yBase = s.yBase / PAD_CENTS_STEP;
+        p.xRange = s.xRange / PAD_CENTS_STEP;
+        p.yRange = s.yRange / PAD_CENTS_STEP;
+    }
     return stored;
 }
 
@@ -144,7 +167,13 @@ static void decode(const StoredSlot &stored, Slot &slot)
         s.envCurve = p.envCurve * ENV_CURVE_STEP;
     }
     slot.sequencer = stored.sequencer;
-    memcpy(slot.pads, stored.pads, sizeof(slot.pads));
+    for (int i = 0; i < NUM_PADS; i++)
+    {
+        const StoredPad &p = stored.pads[i];
+        slot.pads[i] = {(uint8_t)p.mode, (uint8_t)p.rate, (uint8_t)p.chaos, (uint8_t)p.scale, (uint8_t)p.root, (uint8_t)p.axes,
+                        (uint8_t)p.slew, (int16_t)(p.xBase * PAD_CENTS_STEP), (int16_t)(p.xRange * PAD_CENTS_STEP),
+                        (int16_t)(p.yBase * PAD_CENTS_STEP), (int16_t)(p.yRange * PAD_CENTS_STEP)};
+    }
 }
 
 struct SystemStore

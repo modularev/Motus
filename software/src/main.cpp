@@ -88,51 +88,77 @@ static void outputSlider(int channel, int position, int pressure, bool gate)
         setPressDAC(channel, pressure); // MOD press; otherwise the modes write it
 }
 
-// x and y are pad-local; the outputs are as seen from the playing position.
-// An attractor pad is written on every scan, touched or not, as the finger
-// only pulls it; touched says whether it does. An XY pad follows x and y,
-// touched or not (on release: the values from before lifting).
+// X and Y of a pad, 0-1 as the outputs see them: the finger, or the attractor
+static float padTarget[NUM_PADS][2];
+static int padCode[NUM_PADS][2] = {{-1, -1}, {-1, -1}};
+
+// X and Y through the pad's range, quantizer and slew, written when they
+// change; the LEDs show where the outputs are
+static void writePad(int channel)
+{
+    int pad = channel - NUM_SLIDERS;
+    int codeX, codeY;
+    padsShape(pad, padTarget[pad][0], padTarget[pad][1], codeX, codeY);
+    if (codeX != padCode[pad][0] || codeY != padCode[pad][1])
+    {
+        setXYPadDAC12(channel, codeX, codeY);
+        padCode[pad][0] = codeX;
+        padCode[pad][1] = codeY;
+    }
+    // pad-local: the second pad is turned 180 degrees
+    bool flipped = channel == NUM_SLIDERS + 1;
+    int x = lroundf(padsLevel(pad, 0) * 1023), y = lroundf(padsLevel(pad, 1) * 1023);
+    ledX[channel] = flipped ? 1023 - x : x;
+    ledY[channel] = flipped ? 1023 - y : y;
+}
+
+// x and y are pad-local. An attractor runs touched or not, as the finger only
+// pulls it; touched says whether it does. An XY pad follows x and y (on
+// release: the values from before lifting).
 static void outputPad(int channel, int x, int y, int pressure, bool touched)
 {
     // INVERT BECAUSE OF CHANNEL LAYOUT (second pad is 180° turned)
     bool flipped = channel == NUM_SLIDERS + 1;
     int pad = channel - NUM_SLIDERS;
-    if (padsRunning(pad))
-    {
-        padsFinger(pad, touched, flipped ? 1023 - x : x, flipped ? 1023 - y : y, pressure);
-        int outX, outY, outZ;
-        padsOutput(pad, outX, outY, outZ);
-        setXYPadDAC12(channel, outX, outY);
-        setPressDAC(channel, outZ); // Z1 / Z2
-        // the LEDs follow the trajectory, pad-local
-        ledX[channel] = flipped ? 1023 - (outX >> 2) : outX >> 2;
-        ledY[channel] = flipped ? 1023 - (outY >> 2) : outY >> 2;
-        padLit[channel] = true;
-        return;
-    }
-    ledX[channel] = x;
-    ledY[channel] = y;
-    padLit[channel] = true;
     if (flipped)
     {
         x = 1023 - x;
         y = 1023 - y;
     }
-    setXYPadDAC(channel, x, y);
-    setPressDAC(channel, pressure); // Z1 / Z2
+    if (padsRunning(pad))
+    {
+        padsFinger(pad, touched, x, y, pressure);
+        int outX, outY, outZ;
+        padsOutput(pad, outX, outY, outZ);
+        padTarget[pad][0] = outX / 4095.0f;
+        padTarget[pad][1] = outY / 4095.0f;
+        setPressDAC(channel, outZ); // Z1 / Z2
+    }
+    else
+    {
+        padTarget[pad][0] = constrain(x, 0, 1023) / 1023.0f;
+        padTarget[pad][1] = constrain(y, 0, 1023) / 1023.0f;
+        setPressDAC(channel, pressure); // Z1 / Z2
+    }
+    padLit[channel] = true;
+    writePad(channel);
 }
 
 // read one sensor and route its values, live or from a recording, to the
 // outputs, LEDs and display; returns whether its gate is on
 static bool anyTouched; // this scan, for autosave
 
-// an untouched pad: an attractor runs on, an XY pad holds X and Y
+// an untouched pad: an attractor runs on, an XY pad holds X and Y (gliding
+// on with a SLEW)
 static void idlePad(int channel)
 {
     if (padsRunning(channel - NUM_SLIDERS))
         outputPad(channel, 0, 0, 0, false);
     else
+    {
         setPressDAC(channel, 0);
+        writePad(channel);
+    }
 }
 
 static bool updateChannel(int channel)
@@ -244,8 +270,8 @@ static bool updateChannel(int channel)
     else
     {
         outputPad(channel, reading.x, reading.y, pressure, reading.touched);
-        bool flipped = channel == NUM_SLIDERS + 1;
-        displayPad(channel, flipped ? 1023 - reading.x : reading.x, flipped ? 1023 - reading.y : reading.y, recording);
+        int pad = channel - NUM_SLIDERS;
+        displayPad(channel, padsValueText(pad, 0), padsValueText(pad, 1), recording);
     }
     // usbMIDI.sendControlChange(channel, reading.position / 8, 1);
     return slider && reading.touched;

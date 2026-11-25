@@ -156,15 +156,15 @@ void displaySliderText(int channel, const char *top, const char *bottom)
     snprintf(wanted[1], sizeof(wanted[1]), "%-8s", bottom);
 }
 
-void displayPad(int channel, int x, int y, bool recording)
+void displayPad(int channel, const char *x, const char *y, bool recording)
 {
     if (!claimScreen(channel))
         return;
 
-    snprintf(wanted[0], sizeof(wanted[0]), "P%u X%4d", (unsigned)(channel - NUM_SLIDERS + 1) % 10, constrain(x, 0, 1023));
+    snprintf(wanted[0], sizeof(wanted[0]), "P%u X%4s", (unsigned)(channel - NUM_SLIDERS + 1) % 10, x);
     if (recording)
         wanted[0][2] = GLYPH_DOT;
-    snprintf(wanted[1], sizeof(wanted[1]), "   Y%4d", constrain(y, 0, 1023));
+    snprintf(wanted[1], sizeof(wanted[1]), "   Y%4s", y);
 }
 
 void displayProgress(const char *top, float fraction)

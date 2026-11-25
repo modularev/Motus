@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+#include "modes.h"
+
 // RATE: loops per second, exponential over the setting
 static const float PAD_RATE_MIN_HZ = 0.01f;
 static const float PAD_RATE_MAX_HZ = 20.0f;
@@ -55,8 +57,10 @@ static Attractor attractor[NUM_PADS];
 
 void padsDefaults()
 {
+    // xy, 0-8.17 V on both axes, unquantized, no slew
+    int full = MAX_CENTS / PAD_CENTS_STEP * PAD_CENTS_STEP;
     for (int pad = 0; pad < NUM_PADS; pad++)
-        padSettings[pad] = {PAD_XY, 50, 50, 0};
+        padSettings[pad] = {PAD_XY, 50, 50, 0, 0, PAD_AXIS_X | PAD_AXIS_Y, 0, 0, (int16_t)full, 0, (int16_t)full};
 }
 
 bool padsRunning(int pad)
@@ -265,4 +269,110 @@ void padsOutput(int pad, int &x, int &y, int &z)
     x = lroundf(out[0] * 4095);
     y = lroundf(out[1] * 4095);
     z = lroundf(out[2] * 511);
+}
+
+// ---- the outputs: range, quantizer, slew
+
+static const float PAD_FULL_VOLTS = 8.19f;      // the X and Y jacks at DAC value 4095
+static const int NOTE_HOLD_CENTS = 20;           // a new note must be this much nearer than the last: no flicker
+static const float PAD_SLEW_MAX_MS = 10000.0f;
+
+struct Axis
+{
+    float volts;    // what goes out, gliding
+    int note;       // the last quantized note, cents, -1 before the first
+    bool started;   // volts holds a value
+};
+static Axis axes[NUM_PADS][2];
+static uint32_t shapedUs[NUM_PADS];
+
+static float slewMs(int slew)
+{
+    return slew <= 0 ? 0 : powf(PAD_SLEW_MAX_MS, (constrain(slew, 1, PAD_SLEW_STEPS) - 1) / (float)(PAD_SLEW_STEPS - 1));
+}
+
+static void axisRange(int pad, int axis, int &base, int &range)
+{
+    const PadSettings &s = padSettings[pad];
+    base = axis ? s.yBase : s.xBase;
+    range = axis ? s.yRange : s.xRange;
+}
+
+static float shapeAxis(int pad, int axis, float u, float dt)
+{
+    const PadSettings &s = padSettings[pad];
+    Axis &a = axes[pad][axis];
+    int base, range;
+    axisRange(pad, axis, base, range);
+    int cents = constrain(lroundf(base + constrain(u, 0.0f, 1.0f) * range), 0, MAX_CENTS);
+    if (s.scale && (s.axes & (axis ? PAD_AXIS_Y : PAD_AXIS_X)))
+    {
+        int note = modesQuantizeCents(s.scale - 1, s.root, cents);
+        if (a.started && a.note >= 0 && note != a.note && abs(cents - a.note) < abs(cents - note) + NOTE_HOLD_CENTS)
+            note = a.note; // still near enough the last one
+        a.note = note;
+        cents = note;
+    }
+    else
+        a.note = -1;
+
+    float target = (float)cents / CENTS_PER_VOLT;
+    float ms = slewMs(s.slew);
+    if (!a.started || ms <= 0)
+        a.volts = target;
+    else
+        a.volts += (target - a.volts) * (1 - expf(-dt * 1000 * 5 / ms)); // within 1 % after SLEW
+    a.started = true;
+    return a.volts;
+}
+
+void padsShape(int pad, float x, float y, int &codeX, int &codeY)
+{
+    uint32_t now = micros();
+    float dt = min((now - shapedUs[pad]) * 1e-6f, MAX_DT);
+    shapedUs[pad] = now;
+    codeX = constrain(lroundf(shapeAxis(pad, 0, x, dt) / PAD_FULL_VOLTS * 4095), 0, 4095);
+    codeY = constrain(lroundf(shapeAxis(pad, 1, y, dt) / PAD_FULL_VOLTS * 4095), 0, 4095);
+}
+
+float padsLevel(int pad, int axis)
+{
+    int base, range;
+    axisRange(pad, axis, base, range);
+    if (range == 0)
+        return 0.5f;
+    return constrain((axes[pad][axis].volts * CENTS_PER_VOLT - base) / range, 0.0f, 1.0f);
+}
+
+const char *padsValueText(int pad, int axis)
+{
+    static char text[2][8];
+    const Axis &a = axes[pad][axis];
+    if (a.note >= 0)
+    {
+        int semitone = a.note / SEMITONE_CENTS;
+        snprintf(text[axis], sizeof(text[axis]), "%s%u", noteName(semitone), (unsigned)(semitone / 12) % 10);
+    }
+    else
+        snprintf(text[axis], sizeof(text[axis]), "%4.2f", constrain(a.volts, 0.0f, 9.99f));
+    return text[axis];
+}
+
+const char *padSlewText(int slew)
+{
+    static char text[9];
+    float ms = slewMs(slew);
+    if (ms <= 0)
+        snprintf(text, sizeof(text), "%8s", "off");
+    else if (ms < 999.5f)
+        snprintf(text, sizeof(text), "%5u ms", (unsigned)lroundf(ms) % 1000);
+    else
+        snprintf(text, sizeof(text), "%6.2f s", ms / 1000);
+    return text;
+}
+
+const char *padAxesName(int axes)
+{
+    static const char *NAMES[4] = {"none", "x", "y", "x+y"};
+    return NAMES[axes & 3];
 }

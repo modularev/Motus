@@ -6,7 +6,8 @@ void displaySetup();
 // report a touched control; the screen follows the most recently touched one
 // text replaces the position number when not empty, e.g. a note name
 void displaySlider(int channel, int position, int pressure, bool recording = false, const char *text = "");
-void displayPad(int channel, int x, int y, bool recording = false);
+// a touched pad: its X and Y outputs, 4 characters each ("C#3", "2.08")
+void displayPad(int channel, const char *x, const char *y, bool recording = false);
 
 // a touched slider with two lines of its own, e.g. the value WRITE stores
 void displaySliderText(int channel, const char *top, const char *bottom);

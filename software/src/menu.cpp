@@ -64,7 +64,14 @@ enum Setting
     SETTING_PAD_MODE, // an XY pad's: what it does, xy or an attractor
     SETTING_PAD_RATE,
     SETTING_PAD_CHAOS,
-    SETTING_PAD_NONE, // a pad on OUT or TIME: it has nothing there
+    SETTING_PAD_QUANT, // OUT: the pad's quantizer and each axis' range
+    SETTING_PAD_ROOT,
+    SETTING_PAD_AXES,
+    SETTING_PAD_XBASE,
+    SETTING_PAD_XRANGE,
+    SETTING_PAD_YBASE,
+    SETTING_PAD_YRANGE,
+    SETTING_PAD_SLEW, // TIME
     SETTING_MOD,      // OUT: what the mod jack puts out
     SETTING_ENV_LEN,  // MOD env: its settings
     SETTING_ENV_RISE,
@@ -92,10 +99,13 @@ static const ModSource MOD_LFO_CHOICES[] = {MOD_PRESS, MOD_ENV, MOD_QUAD, MOD_IN
 static const int ENV_LEN_COARSE_STEP = 4; // of 127: about 1.4 times longer per detent, 1 with fine steps
 static const int ENV_RISE_STEP = 10;      // %, 1 with fine steps
 static const Setting TIME_SETTINGS[] = {SETTING_SLEW, SETTING_SLANT, SETTING_DELAY, SETTING_LOOP, SETTING_FREEZE};
-// an XY pad selected: its settings are on PLAY
+// an XY pad selected: PLAY its mode, OUT its quantizer and ranges, TIME its slew
 static const Setting PAD_XY_SETTINGS[] = {SETTING_PAD_MODE};
 static const Setting PAD_RUN_SETTINGS[] = {SETTING_PAD_MODE, SETTING_PAD_RATE, SETTING_PAD_CHAOS};
-static const Setting PAD_NONE[] = {SETTING_PAD_NONE};
+static const Setting PAD_OUT_SETTINGS[] = {SETTING_PAD_QUANT, SETTING_PAD_ROOT, SETTING_PAD_AXES, SETTING_PAD_XBASE,
+                                           SETTING_PAD_XRANGE, SETTING_PAD_YBASE, SETTING_PAD_YRANGE};
+static const Setting PAD_TIME_SETTINGS[] = {SETTING_PAD_SLEW};
+static const int PAD_SLEW_COARSE_STEP = 8; // of 127: about 1.8 times longer per detent, 1 with fine steps
 static const int PAD_RATE_FINE_STEP = 1;   // of 100 along the rate range
 static const int PAD_RATE_COARSE_STEP = 5;
 static const int PAD_CHAOS_STEP = 5;       // %, 1 with fine steps
@@ -201,10 +211,15 @@ static SliderSettings &editedSlider()
 
 static int pageSettings(Page p, const Setting *&list)
 {
-    if (padSelected() && p != PAGE_PLAY)
+    if (padSelected() && p == PAGE_OUT)
     {
-        list = PAD_NONE;
-        return COUNT(PAD_NONE);
+        list = PAD_OUT_SETTINGS;
+        return COUNT(PAD_OUT_SETTINGS);
+    }
+    if (padSelected() && p == PAGE_TIME)
+    {
+        list = PAD_TIME_SETTINGS;
+        return COUNT(PAD_TIME_SETTINGS);
     }
     if (padSelected())
     {
@@ -471,8 +486,6 @@ static void change(int detents)
                                : (fine ? VOLT_FINE_STEP * fastFactor() : VOLT_COARSE_STEP);
         switch (currentSetting())
         {
-        case SETTING_PAD_NONE:
-            break;
         case SETTING_MOD:
         {
             // through the mode's choices
@@ -511,6 +524,40 @@ static void change(int detents)
             break;
         case SETTING_PAD_CHAOS:
             stepSetting(padSettings[slider - NUM_SLIDERS].chaos, detents * (fine ? fastFactor() : PAD_CHAOS_STEP), 0, PAD_CHAOS_MAX);
+            break;
+        case SETTING_PAD_QUANT:
+            stepSetting(padSettings[slider - NUM_SLIDERS].scale, detents, 0, NUM_SCALES);
+            break;
+        case SETTING_PAD_ROOT:
+            stepSetting(padSettings[slider - NUM_SLIDERS].root, detents, 0, 11);
+            break;
+        case SETTING_PAD_AXES:
+            stepSetting(padSettings[slider - NUM_SLIDERS].axes, detents, PAD_AXIS_X, PAD_AXIS_X | PAD_AXIS_Y);
+            break;
+        case SETTING_PAD_XBASE:
+        case SETTING_PAD_XRANGE:
+        case SETTING_PAD_YBASE:
+        case SETTING_PAD_YRANGE:
+        {
+            // as a slider's, in whole steps of the stored resolution
+            PadSettings &p = padSettings[slider - NUM_SLIDERS];
+            int step = p.scale ? (fine ? SEMITONE_CENTS * fastFactor() : OCTAVE_CENTS)
+                               : (fine ? VOLT_FINE_STEP * fastFactor() : VOLT_COARSE_STEP);
+            int top = MAX_CENTS / PAD_CENTS_STEP * PAD_CENTS_STEP;
+            Setting setting = currentSetting();
+            bool y = setting == SETTING_PAD_YBASE || setting == SETTING_PAD_YRANGE;
+            int16_t &base = y ? p.yBase : p.xBase;
+            int16_t &range = y ? p.yRange : p.xRange;
+            if (setting == SETTING_PAD_XBASE || setting == SETTING_PAD_YBASE)
+                base = constrain(base + detents * step, 0, top); // the range keeps its size where it can
+            else
+                range += detents * step;
+            range = constrain(range, -base, top - base);
+            break;
+        }
+        case SETTING_PAD_SLEW:
+            stepSetting(padSettings[slider - NUM_SLIDERS].slew, detents * (fine ? fastFactor() : PAD_SLEW_COARSE_STEP), 0,
+                        PAD_SLEW_STEPS);
             break;
         case SETTING_LFO:
             stepSetting(s.mode, detents, MODE_SLIDE, MODE_LFO);
@@ -730,7 +777,7 @@ static void show()
     // the LFO setting of what the slider sets shows as SETS
     static const char *SETTING_NAMES[] = {"QUANT", "ROOT", "BASE", "RANGE", "PLAY", "SLEW", "GATE", "SHAPE", "RATE", "DEPTH",
                                           "RESET", "GATE", "LFO", "PHASE", "SETS", "FREQ", "SLANT", "DELAY", "LOOP", "FREEZE",
-                                          "MODE", "RATE", "CHAOS", "", "MOD", "LEN", "RISE", "CURVE", "HOLD", "VEL"};
+                                          "MODE", "RATE", "CHAOS", "QUANT", "ROOT", "AXES", "XBASE", "XRNG", "YBASE", "YRNG", "SLEW", "MOD", "LEN", "RISE", "CURVE", "HOLD", "VEL"};
     char top[9];
     char bottom[9];
     const SliderSettings &s = editedSlider();
@@ -813,18 +860,46 @@ static void show()
             // "P1 MODE" over "lorenz"
             const PadSettings &p = padSettings[slider - NUM_SLIDERS];
             snprintf(top, sizeof(top), "P%u%c%s", (unsigned)(slider - NUM_SLIDERS + 1) % 10, fine ? GLYPH_FINE : ' ', SETTING_NAMES[setting]);
-            if (setting == SETTING_PAD_NONE)
+            // QUANT to RANGE read as a slider's
+            SliderSettings range;
+            memset(&range, 0, sizeof(range));
+            range.scale = p.scale;
+            range.root = p.root;
+            bool y = setting == SETTING_PAD_YBASE || setting == SETTING_PAD_YRANGE;
+            range.base = y ? p.yBase : p.xBase;
+            range.range = y ? p.yRange : p.xRange;
+            switch (setting)
             {
-                // nothing on OUT or TIME: the pad's settings are on PLAY
-                snprintf(top, sizeof(top), "P%u %s", (unsigned)(slider - NUM_SLIDERS + 1) % 10, page == PAGE_OUT ? "OUT" : "TIME");
-                snprintf(bottom, sizeof(bottom), "%8s", "on PLAY");
-            }
-            else if (setting == SETTING_PAD_MODE)
+            case SETTING_PAD_MODE:
                 snprintf(bottom, sizeof(bottom), "%8s", padModeName(p.mode));
-            else if (setting == SETTING_PAD_RATE)
+                break;
+            case SETTING_PAD_RATE:
                 snprintf(bottom, sizeof(bottom), "%s", padRateText(p.rate));
-            else
+                break;
+            case SETTING_PAD_CHAOS:
                 snprintf(bottom, sizeof(bottom), "%6u %%", (unsigned)p.chaos % 1000);
+                break;
+            case SETTING_PAD_QUANT:
+                formatSetting(bottom, sizeof(bottom), SETTING_QUANT, range);
+                break;
+            case SETTING_PAD_ROOT:
+                formatSetting(bottom, sizeof(bottom), SETTING_ROOT, range);
+                break;
+            case SETTING_PAD_AXES:
+                snprintf(bottom, sizeof(bottom), "%8s", padAxesName(p.axes));
+                break;
+            case SETTING_PAD_XBASE:
+            case SETTING_PAD_YBASE:
+                formatSetting(bottom, sizeof(bottom), SETTING_BASE, range);
+                break;
+            case SETTING_PAD_XRANGE:
+            case SETTING_PAD_YRANGE:
+                formatSetting(bottom, sizeof(bottom), SETTING_RANGE, range);
+                break;
+            default:
+                snprintf(bottom, sizeof(bottom), "%s", padSlewText(p.slew));
+                break;
+            }
             break;
         }
         snprintf(top, sizeof(top), "#%u%c%s", number, fine ? GLYPH_FINE : ' ', SETTING_NAMES[setting]);
@@ -1129,9 +1204,8 @@ void menuUpdate(uint8_t buttons)
             else if (sliderPage(page) && heldPad >= 0 && PAGES[heldPad] == page)
             {
                 // the page's own button held on a slider page: which slider is
-                // edited, and on PLAY past slider 8 the XY pads
-                int count = page == PAGE_PLAY ? NUM_SENSORS : NUM_SLIDERS;
-                slider = ((min(slider, count - 1) + detents) % count + count) % count;
+                // edited, and past slider 8 the XY pads
+                slider = ((slider + detents) % NUM_SENSORS + NUM_SENSORS) % NUM_SENSORS;
                 item = min(item, itemCount(page) - 1);
             }
             else
