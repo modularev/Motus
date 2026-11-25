@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-// Global settings, edited on the SYS page and stored with SAVE
+// Global settings, edited on the SYS page and stored with every save
 
 struct SystemSettings
 {

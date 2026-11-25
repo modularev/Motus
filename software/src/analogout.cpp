@@ -114,22 +114,16 @@ void setPressDAC(int channel, int value_9bit)
 
 void setXYPadDAC(int channel, int x_value_10bit, int y_value_10bit)
 {
+    setXYPadDAC12(channel, x_value_10bit << 2, y_value_10bit << 2);
+}
+
+void setXYPadDAC12(int channel, int x_value_12bit, int y_value_12bit)
+{
     // DAC outputs are wired A = X1, B = X2, C = Y1, D = Y2
     selectDac(4);
-    {
-
-        if (channel == 8)
-        {
-            dac.setChannelValue(MCP4728_CHANNEL_A, x_value_10bit << 2, MCP4728_VREF_INTERNAL);
-            dac.setChannelValue(MCP4728_CHANNEL_C, y_value_10bit << 2, MCP4728_VREF_INTERNAL);
-        }
-
-        else if (channel == 9)
-        {
-            dac.setChannelValue(MCP4728_CHANNEL_B, x_value_10bit << 2, MCP4728_VREF_INTERNAL);
-            dac.setChannelValue(MCP4728_CHANNEL_D, y_value_10bit << 2, MCP4728_VREF_INTERNAL);
-        }
-    }
+    bool first = channel == NUM_SLIDERS;
+    dac.setChannelValue(first ? MCP4728_CHANNEL_A : MCP4728_CHANNEL_B, x_value_12bit, MCP4728_VREF_INTERNAL);
+    dac.setChannelValue(first ? MCP4728_CHANNEL_C : MCP4728_CHANNEL_D, y_value_12bit, MCP4728_VREF_INTERNAL);
 }
 
 void setMaster(int pos_12bit, int force_9bit)

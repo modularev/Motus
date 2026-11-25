@@ -5,10 +5,10 @@
 
 #include "sensors.h"
 
-// Touch recorder. Tap HOLD to arm; the first touch on a slider or pad starts
-// recording it, including lifts and pauses, until HOLD is tapped again (a
-// tap while armed disarms). Or hold HOLD and touch a control: it records for
-// as long as HOLD is held. With recording armed, hold HOLD and touch a loop to
+// Touch recorder. Tap REC to arm; the first touch on a slider or pad starts
+// recording it, including lifts and pauses, until REC is tapped again (a
+// tap while armed disarms). Or hold REC and touch a control: it records for
+// as long as REC is held. With recording armed, hold REC and touch a loop to
 // stop it, or keep holding for the stop-all progress bar.
 
 struct Playback

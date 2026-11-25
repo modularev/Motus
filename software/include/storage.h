@@ -20,7 +20,7 @@ bool storageUnsaved();
 
 // call once per loop: after a pause in playing (idle: no slider, pad or button
 // touched) changes are saved into the current slot, if AUTOSAVE is on; not over
-// a slot while a template is loaded, until SAVE or LOAD
+// a slot while a template is loaded, until a save or load
 void storageAutosave(bool idle);
 
 // fresh starting points: faders, lfos, keys, split (4 keys, 4 LFOs); they

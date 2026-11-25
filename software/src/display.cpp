@@ -95,7 +95,7 @@ void displaySetup()
 
     setBarGlyphs();
 
-    // recording dot and FINE indicator (plus-minus)
+    // recording dot and fine-steps indicator (plus-minus)
     uint8_t dot[GLYPH_ROWS] = {0b00000, 0b01110, 0b11111, 0b11111, 0b11111, 0b01110, 0b00000, 0b00000};
     uint8_t fineGlyph[GLYPH_ROWS] = {0b00100, 0b01110, 0b00100, 0b00000, 0b01110, 0b00000, 0b00000, 0b00000};
     setGlyph(GLYPH_DOT, dot);

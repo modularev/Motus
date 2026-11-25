@@ -8,6 +8,7 @@
 #include "led.h"
 #include "menu.h"
 #include "modes.h"
+#include "pads.h"
 #include "presets.h"
 #include "recorder.h"
 #include "sequencer.h"
@@ -87,15 +88,32 @@ static void outputSlider(int channel, int position, int pressure, bool gate)
     setPressDAC(channel, pressure);
 }
 
-// x and y are pad-local; the outputs are as seen from the playing position
-static void outputPad(int channel, int x, int y, int pressure)
+// x and y are pad-local; the outputs are as seen from the playing position.
+// An attractor pad is written on every scan, touched or not, as the finger
+// only pulls it; touched says whether it does. An XY pad follows x and y,
+// touched or not (on release: the values from before lifting).
+static void outputPad(int channel, int x, int y, int pressure, bool touched)
 {
+    // INVERT BECAUSE OF CHANNEL LAYOUT (second pad is 180° turned)
+    bool flipped = channel == NUM_SLIDERS + 1;
+    int pad = channel - NUM_SLIDERS;
+    if (padsRunning(pad))
+    {
+        padsFinger(pad, touched, flipped ? 1023 - x : x, flipped ? 1023 - y : y, pressure);
+        int outX, outY, outZ;
+        padsOutput(pad, outX, outY, outZ);
+        setXYPadDAC12(channel, outX, outY);
+        setPressDAC(channel, outZ); // Z1 / Z2
+        // the LEDs follow the trajectory, pad-local
+        ledX[channel] = flipped ? 1023 - (outX >> 2) : outX >> 2;
+        ledY[channel] = flipped ? 1023 - (outY >> 2) : outY >> 2;
+        padLit[channel] = true;
+        return;
+    }
     ledX[channel] = x;
     ledY[channel] = y;
     padLit[channel] = true;
-
-    // INVERT BECAUSE OF CHANNEL LAYOUT (second pad is 180° turned)
-    if (channel == NUM_SLIDERS + 1)
+    if (flipped)
     {
         x = 1023 - x;
         y = 1023 - y;
@@ -108,22 +126,31 @@ static void outputPad(int channel, int x, int y, int pressure)
 // outputs, LEDs and display; returns whether its gate is on
 static bool anyTouched; // this scan, for autosave
 
+// an untouched pad: an attractor runs on, an XY pad holds X and Y
+static void idlePad(int channel)
+{
+    if (padsRunning(channel - NUM_SLIDERS))
+        outputPad(channel, 0, 0, 0, false);
+    else
+        setPressDAC(channel, 0);
+}
+
 static bool updateChannel(int channel)
 {
     TouchReading reading = sensorRead(channel);
     anyTouched |= reading.touched;
     bool slider = isSlider(channel);
 
-    // A touch while a SET pad is held only selects the slider for the menu:
+    // A touch while a row button A-D is held only selects the slider or pad for the menu:
     // until the finger lifts it is hidden from everything else, so no value,
     // gate or preset changes, nothing is recorded and a loop keeps playing.
-    static bool selectOnly[NUM_SLIDERS];
-    if (slider && reading.started && menuPadHeld())
+    static bool selectOnly[NUM_SENSORS];
+    if (reading.started && menuPadHeld())
     {
         selectOnly[channel] = true;
         menuSelect(channel);
     }
-    if (slider && selectOnly[channel])
+    if (selectOnly[channel])
     {
         if (!reading.touched)
             selectOnly[channel] = false;
@@ -163,37 +190,44 @@ static bool updateChannel(int channel)
     if (source == SOURCE_NONE)
     {
         // the touch stopped a loop: outputs stay quiet until it lifts
-        bool gate = slider && modesGate(channel, false);
+        if (!slider)
+        {
+            idlePad(channel);
+            return false;
+        }
+        bool gate = modesGate(channel, false);
         writeGate(channel, gate);
         setPressDAC(channel, 0);
-        if (slider)
-            masterInput[channel].active = false;
+        masterInput[channel].active = false;
         return gate;
     }
 
     if (reading.started && slider)
-    {
         sequencerTouch(channel);
+    if (reading.started)
         menuSelect(channel);
-    }
 
     if (source == SOURCE_LOOP)
     {
         if (slider)
             outputSlider(channel, playback.position, playback.pressure, playback.gate);
         else
-            outputPad(channel, playback.position, playback.y, playback.pressure);
+            outputPad(channel, playback.position, playback.y, playback.pressure, playback.gate);
         return slider && playback.gate;
     }
 
     // on release the outputs are set once more, to the value from before lifting
     if (!reading.touched && !reading.released)
     {
-        bool gate = slider && modesGate(channel, false);
+        if (!slider)
+        {
+            idlePad(channel);
+            return false;
+        }
+        bool gate = modesGate(channel, false);
         writeGate(channel, gate);
         setPressDAC(channel, 0);
-        if (slider)
-            masterInput[channel].active = false;
+        masterInput[channel].active = false;
         return gate;
     }
 
@@ -207,7 +241,7 @@ static bool updateChannel(int channel)
     }
     else
     {
-        outputPad(channel, reading.x, reading.y, pressure);
+        outputPad(channel, reading.x, reading.y, pressure, reading.touched);
         bool flipped = channel == NUM_SLIDERS + 1;
         displayPad(channel, flipped ? 1023 - reading.x : reading.x, flipped ? 1023 - reading.y : reading.y, recording);
     }
@@ -280,7 +314,7 @@ static void updateLeds()
             else if (modesRunning(channel))
                 setSliderLED(channel, modesLfoLevel(channel), brightness, top);
             else if (modesShowsOutput(channel))
-                setSliderLED(channel, modesOutputLevel(channel), brightness, top, note); // CTRL's delayed output
+                setSliderLED(channel, modesOutputLevel(channel), brightness, top, note); // TIME's delayed output
             else if (note)
                 setSliderLED(channel, modesNotePosition(channel), brightness, top, true);
             else
@@ -336,6 +370,7 @@ void loop()
 
         // LFOs, glides and the sequencer clock run between the sensor reads, not once per scan
         modesUpdate();
+        padsUpdate();
         sequencerUpdate();
     }
     // m.gate: the sequencer's triggers while it runs, else the meta gate

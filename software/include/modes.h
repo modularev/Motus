@@ -67,8 +67,8 @@ struct SliderSettings
     uint8_t lfoPhase;  // LFO: phase offset, 0-255 for 0-360 degrees
     int16_t base;      // the output at the bottom of the slider, or the LFO's low point
     int16_t range;     // from base to the top of the slider, or to the LFO's high point; negative inverts
-    uint16_t slewMs;   // CTRL: glide time, 0-10000 ms
-    // CTRL, after the mode (as Zadar's CONTROL): a delay line with feedback, then the slew
+    uint16_t slewMs;   // TIME: glide time, 0-10000 ms
+    // TIME, after the mode (as Zadar's CONTROL): a delay line with feedback, then the slew
     int8_t slant;      // -100..100 %: the slew's rise against its fall; -100 rises at once, +100 falls at once
     uint8_t loop;      // 0-100 %: how much of the delayed output is fed back; 100 loops it endlessly
     uint8_t freeze;    // the line loops at 100 %: 0 never, 1 while untouched, 2 while touched
@@ -154,7 +154,7 @@ bool modesRunning(int slider);
 int modesOutputCode(int slider);
 int modesLfoLevel(int slider);
 
-// CTRL: a slider with a DELAY keeps moving after release, so it joins the
+// TIME: a slider with a DELAY keeps moving after release, so it joins the
 // master like an LFO; its LEDs then show the output, not the finger: where
 // the output lies in its range, 10 bit
 bool modesMoving(int slider);

@@ -1,5 +1,1 @@
 .DS_Store
-
-# user manual and its generator, kept local
-docs/Motus-Manual.pdf
-docs/build_manual.py

@@ -142,7 +142,7 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
       </div>
       <p class="lede">Eight touch sliders, two XY pads, a <strong>four-row step sequencer</strong>, LFOs, quantizers and
         <strong>loop recording</strong>, played by finger and set up on an 8×2 character display.</p>
-      <img src="panel.png" alt="The Motus front panel: XY pads on the left, eight sliders with force, position and gate jacks, and on the right the master and sequencer jacks, SET pads, display, FINE, HOLD, LOAD, SAVE and the encoder" width="2481" height="1518">
+      <img src="panel-labelled.png" alt="The Motus front panel: XY pads on the left, eight sliders with force, position and gate jacks, and on the right the master and sequencer jacks, the buttons A·PLAY, B·OUT, C·TIME and D·SEQ, the display, EDIT, REC, RUN, PATCH and the encoder" width="2481" height="1518">
     </header>
 
     <!-- ============================================================ overview -->
@@ -156,7 +156,7 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
         <thead><tr><th>Section</th><th>Jacks</th><th>What comes out</th></tr></thead>
         <tbody>
           <tr><td>Sliders 1–8</td><td><span class="j">position</span> <span class="j">force</span> <span class="j">gate</span></td><td>the slider's output (a voltage, a note or an LFO), the finger's pressure, and a gate or trigger. The output holds its value after you lift.</td></tr>
-          <tr><td>XY pads 1–2</td><td><span class="j">X1 Y1 Z1</span><br><span class="j">X2 Y2 Z2</span></td><td>the finger's position on the pad, and its pressure (Z).</td></tr>
+          <tr><td>XY pads 1–2</td><td><span class="j">X1 Y1 Z1</span><br><span class="j">X2 Y2 Z2</span></td><td>the finger's position on the pad, and its pressure (Z); or a Lorenz or Rössler attractor that the finger pulls on.</td></tr>
           <tr><td>Master</td><td><span class="j">m.pos</span> <span class="j">m.force</span> <span class="j">m.gate</span></td><td>the average of all sliders that are touched, looping or running an LFO, so it always stays in range; it holds when none are. The gate is on while any slider gate is on, or gives the sequencer's step trigger while any row runs.</td></tr>
           <tr><td>Sequencer</td><td><span class="j">var 1–4</span></td><td>the four rows A–D of the step sequencer.</td></tr>
         </tbody>
@@ -165,14 +165,19 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
       <div class="tbl"><table>
         <thead><tr><th>Control</th><th>Main use</th></tr></thead>
         <tbody>
-          <tr><td><kbd>SET 1–4</kbd></td><td>tap: a settings page (<kbd>SET 1</kbd> PLAY, <kbd>SET 2</kbd> OUT, <kbd>SET 3</kbd> CTRL, <kbd>SET 4</kbd> SEQ and SYS) · double tap: start or stop sequencer row A–D · hold: the row's step view</td></tr>
-          <tr><td><kbd>FINE</kbd></td><td>tap: toggle fine encoder steps (± on the display), until the menu closes · double tap: start or stop all rows · hold and turn: change a value</td></tr>
-          <tr><td><kbd>HOLD</kbd></td><td>record and loop slider or pad movements</td></tr>
-          <tr><td><kbd>SAVE</kbd> <kbd>LOAD</kbd></td><td>four patch slots, and templates for a fresh start</td></tr>
+          <tr><td><kbd>A·PLAY</kbd> <kbd>B·OUT</kbd> <kbd>C·TIME</kbd> <kbd>D·SEQ</kbd></td><td>tap: that settings page · double tap: start or stop sequencer row A–D · hold: the row's step view</td></tr>
+          <tr><td><kbd>EDIT</kbd></td><td>hold and turn: change a value · tap: toggle fine encoder steps (± on the display), until the menu closes</td></tr>
+          <tr><td><kbd>REC</kbd></td><td>record and loop slider or pad movements</td></tr>
+          <tr><td><kbd>RUN</kbd></td><td>tap: start or stop all rows · hold: the SYS settings</td></tr>
+          <tr><td><kbd>PATCH</kbd></td><td>tap: load one of four slots, or a template for a fresh start · hold: save</td></tr>
           <tr><td>Encoder</td><td>scroll, step the sequence by hand, edit values</td></tr>
         </tbody>
       </table></div>
-      <p class="note">On the screen, the sequencer rows are called <b>A–D</b> (<kbd>SET 1</kbd> and <span class="j">var 1</span> are row A) and the sliders <b>#1–#8</b>, by their number on the panel.</p>
+      <p class="note">On the screen, the sequencer rows are called <b>A–D</b> (<kbd>A</kbd> and the <span class="j">var 1</span> jack above it are row A) and the sliders <b>#1–#8</b>, by their number on the panel.</p>
+      <p class="note">The buttons were relabelled after the first panel print with 6 mm tape strips (see
+        <span class="j">docs/labels/</span>): <kbd>A·PLAY</kbd>–<kbd>D·SEQ</kbd> were <span class="v">SET 1</span>–<span class="v">SET 4</span>,
+        and <kbd>EDIT</kbd>, <kbd>REC</kbd>, <kbd>RUN</kbd>, <kbd>PATCH</kbd> were <span class="v">FINE</span>, <span class="v">HOLD</span>,
+        <span class="v">LOAD</span>, <span class="v">SAVE</span>.</p>
     </section>
 
     <section id="start">
@@ -180,10 +185,10 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
       <p class="note warn"><b>Keep your fingers off the touch surfaces while switching on.</b> Motus measures the
         untouched level of every electrode at start-up. It then shows <span class="v">MOTUS</span> and the slot it loaded,
         and opens the idle screen.</p>
-      <p>For a quick start, load a template: tap <kbd>LOAD</kbd>, turn the encoder past the four slots to
+      <p>For a quick start, load a template: tap <kbd>PATCH</kbd>, turn the encoder past the four slots to
         <span class="v">INIT?</span>, pick <span class="v">faders</span>, <span class="v">lfos</span>,
-        <span class="v">keys</span> or <span class="v">split</span> and tap <kbd>LOAD</kbd> again. Changes are saved into
-        the current slot by themselves (see <a href="#saving">Saving and loading</a>).</p>
+        <span class="v">keys</span> or <span class="v">split</span> and tap <kbd>PATCH</kbd> again. Hold <kbd>PATCH</kbd> to save
+        (see <a href="#saving">Saving and loading</a>).</p>
     </section>
 
     <!-- ============================================================ playing -->
@@ -201,7 +206,9 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
         first finger instead and the value stays with the second, without the touch ending. Use it for square-wave
         modulation or to jump to a new value mid-gesture. The fingers need about one electrode of space between them.</p>
       <h3>XY pads</h3>
-      <p>The pads output X, Y and pressure (Z). Their LEDs glow around the finger. Pads can be recorded and looped like sliders.</p>
+      <p>The pads output X, Y and pressure (Z). Their LEDs glow around the finger. Pads can be recorded and looped like
+        sliders. A pad can also run a chaotic attractor that moves on its own and that the finger pulls on (see
+        <a href="#padsettings">XY pad settings</a>).</p>
       <figure class="panel narrow" data-fig="play">
         <figcaption>Slide a slider, jump with a second finger (lift it to jump back), and move or press on a pad.</figcaption>
       </figure>
@@ -225,34 +232,36 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
     <!-- ============================================================ menus -->
     <section id="menus">
       <h2>Menus</h2>
-      <p>Everything is set up with the four <kbd>SET</kbd> pads, <kbd>FINE</kbd> and the encoder. A tap opens a settings
-        page, a double tap starts or stops a sequencer row, and holding opens a row's step view (see
-        <a href="#sequencer">Sequencer</a>).</p>
+      <p>Everything is set up with the four row buttons <kbd>A</kbd>–<kbd>D</kbd>, <kbd>EDIT</kbd> and the encoder. A tap
+        on a row button opens its settings page (PLAY, OUT, TIME, SEQ), a double tap starts or stops its sequencer row, and
+        holding opens the row's step view (see <a href="#sequencer">Sequencer</a>). The encoder scrolls, and
+        <kbd>EDIT</kbd> held while turning changes the value. Hold <kbd>RUN</kbd> for the SYS settings.</p>
       <div class="figs">
-        <figure class="panel" data-fig="menu1"><figcaption>Touch the slider to edit, tap SET 1 for how it plays (SET 2: its range, SET 3: CTRL), scroll with the encoder, and hold FINE while turning to change the value.</figcaption></figure>
-        <figure class="panel" data-fig="menu2"><figcaption>On PLAY, OUT or CTRL, hold that page's SET pad and turn right away to choose a slider without touching it; its LEDs breathe.</figcaption></figure>
+        <figure class="panel" data-fig="menu1"><figcaption>Touch the slider to edit, tap A·PLAY for how it plays (B·OUT: its range, C·TIME: slew and delay), scroll with the encoder, and hold EDIT while turning to change the value.</figcaption></figure>
+        <figure class="panel" data-fig="menu2"><figcaption>On PLAY, OUT or TIME, hold that page's button and turn right away to choose a slider without touching it; its LEDs breathe.</figcaption></figure>
       </div>
       <div class="tbl"><table class="wrap1">
         <thead><tr><th>Gesture</th><th>Result</th></tr></thead>
         <tbody>
-          <tr><td>Tap <kbd>SET 1–4</kbd></td><td>open the PLAY, OUT, CTRL or SEQ page (SEQ ends with the SYS settings); tap it again to close it</td></tr>
-          <tr><td>Tap another <kbd>SET</kbd> pad</td><td>with a page open: switch to that page · in a step view or a row's settings: close it, back to the idle screen</td></tr>
-          <tr><td>Double tap <kbd>SET 1–4</kbd></td><td>start or stop row A–D, from anywhere; the first tap acts as a tap at once, so its page opens (or a view closes) as well</td></tr>
-          <tr><td>Hold <kbd>SET 1–4</kbd> (0.5 s)</td><td>open the step view of row A–D; held there again: the row's settings</td></tr>
+          <tr><td>Tap <kbd>A</kbd>–<kbd>D</kbd></td><td>open the PLAY, OUT, TIME or SEQ page; tap it again to close it</td></tr>
+          <tr><td>Tap another row button</td><td>with a page open: switch to that page · in a step view or a row's settings: close it, back to the idle screen</td></tr>
+          <tr><td>Double tap <kbd>A</kbd>–<kbd>D</kbd></td><td>start or stop row A–D, from anywhere; whatever was open stays as it was</td></tr>
+          <tr><td>Hold <kbd>A</kbd>–<kbd>D</kbd> (0.5 s)</td><td>open the step view of row A–D; held there again: the row's settings</td></tr>
           <tr><td>In settings: encoder</td><td>scroll through the settings</td></tr>
-          <tr><td>In settings: hold <kbd>FINE</kbd> and turn</td><td>change the value</td></tr>
-          <tr><td>Tap <kbd>FINE</kbd></td><td>toggle fine steps for exact values (± on the display); they end when the menu closes</td></tr>
-          <tr><td>Double tap <kbd>FINE</kbd></td><td>start or stop all rows, from anywhere</td></tr>
+          <tr><td>In settings: hold <kbd>EDIT</kbd> and turn</td><td>change the value</td></tr>
+          <tr><td>Tap <kbd>EDIT</kbd></td><td>toggle fine steps for exact values (± on the display); they end when the menu closes</td></tr>
+          <tr><td>Tap <kbd>RUN</kbd></td><td>start all rows, or stop them if any runs, from anywhere</td></tr>
+          <tr><td>Hold <kbd>RUN</kbd> (0.5 s)</td><td>open the SYS settings; held again: close them</td></tr>
         </tbody>
       </table></div>
-      <p class="note">A <kbd>SET</kbd> pad held while the encoder turns or a slider is touched is a modifier, so letting
-        go is neither a tap nor a hold. Touching a slider selects which slider PLAY, OUT and CTRL edit, and it keeps
-        playing as usual; while a <kbd>SET</kbd> pad is held, a touch only selects and leaves the outputs unchanged.
+      <p class="note">A row button held while the encoder turns or a slider is touched is a modifier, so letting
+        go is neither a tap nor a hold. Touching a slider or pad selects what PLAY, OUT and TIME edit, and it keeps
+        playing as usual; while a row button is held, a touch only selects and leaves the outputs unchanged.
         While a settings page is open, the selected slider's LEDs breathe. Settings pages close after 5 seconds without
-        input; a step view stays open until you tap a <kbd>SET</kbd> pad.</p>
+        input; a step view stays open until you tap a row button.</p>
       <div class="screens">
         <figure class="lcd" data-top="#3 QUANT" data-bot="   major" data-cap="OUT page"></figure>
-        <figure class="lcd" data-top="#3±BASE" data-bot="C2  2.00" data-cap="with FINE on"></figure>
+        <figure class="lcd" data-top="#3±BASE" data-bot="C2  2.00" data-cap="with fine steps"></figure>
         <figure class="lcd" data-top="BPM" data-bot="     120" data-cap="SEQ page"></figure>
         <figure class="lcd" data-top="B  SPEED" data-bot="      x2" data-cap="row settings"></figure>
       </div>
@@ -260,17 +269,17 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
 
     <!-- ============================================================ slider settings -->
     <section id="slider">
-      <h2>Slider settings <small>tap SET 1, 2, 3</small></h2>
+      <h2>Slider settings <small>tap A, B, C</small></h2>
       <p>Every slider works in one of two modes, chosen with LFO at the top of its PLAY page:</p>
       <div class="cards">
         <div class="card"><h3>LFO off · SLIDE</h3><p>The finger sets the output. Without a quantizer it works like a fader; with one it plays the notes of a scale, like a keyboard strip, and sweeping it plays an arpeggio.</p></div>
         <div class="card"><h3>LFO on</h3><p>The output runs an LFO that keeps running after you lift. The finger sets its rate, or with SETS set to depth, how far it swings.</p></div>
       </div>
-      <p>A slider's settings sit on three pages: <b>PLAY</b> (<kbd>SET 1</kbd>) how the finger plays it, <b>OUT</b>
-        (<kbd>SET 2</kbd>) its range and quantizer, and <b>CTRL</b> (<kbd>SET 3</kbd>) what happens to the output
-        afterwards. Both modes share the same language for their range: <b>BASE</b> is where the output starts (the bottom of the
+      <p>A slider's settings sit on three pages: <b>PLAY</b> (<kbd>A</kbd>) how the finger plays it, <b>OUT</b>
+        (<kbd>B</kbd>) its range and quantizer, and <b>TIME</b> (<kbd>C</kbd>) what happens to the output
+        over time afterwards. Both modes share the same language for their range: <b>BASE</b> is where the output starts (the bottom of the
         slider, or the LFO's low point) and <b>RANGE</b> how far it goes. A negative RANGE inverts the slider or the LFO.</p>
-      <h3>PLAY <small>tap SET 1</small></h3>
+      <h3>PLAY <small>tap A</small></h3>
       <div class="tbl"><table>
         <thead><tr><th>Setting</th><th>Mode</th><th>Values</th></tr></thead>
         <tbody>
@@ -287,7 +296,7 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
           <tr><td>GATE</td><td class="mode">LFO</td><td>while touched · cycle: high for the first half of every cycle (a clock) · trig: at every cycle start · note: on every new quantized note</td></tr>
         </tbody>
       </table></div>
-      <h3>OUT <small>tap SET 2</small></h3>
+      <h3>OUT <small>tap B</small></h3>
       <div class="tbl"><table>
         <thead><tr><th>Setting</th><th>Values</th></tr></thead>
         <tbody>
@@ -297,7 +306,7 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
           <tr><td>RANGE</td><td>the size of the range: volts, or semitones when quantized (<span class="v">24 st</span> = two octaves); negative inverts</td></tr>
         </tbody>
       </table></div>
-      <h3>CTRL <small>tap SET 3</small></h3>
+      <h3 id="time">TIME <small>tap C</small></h3>
       <p>A CV processor after the mode, after the CONTROL modulator of the GRM Ateliers, in both modes: the output
         (the finger's value, or the LFO) runs through a delay line with feedback, then a slew. Only the position output
         is processed; gate and force stay live. With DELAY and SLEW off the output passes straight through.</p>
@@ -313,11 +322,35 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
       </table></div>
       <p class="note">A quantized slider is quantized again after the line, so echoes and loops stay in the scale. A slider
         with a DELAY joins the master outputs like an LFO, and its LEDs show the output rather than the finger.</p>
-      <p class="note"><b>Steps when editing:</b> BASE and RANGE move by octaves when quantized (semitones with FINE on),
-        otherwise by 1 V (0.1 V with FINE on). Small steps go four times further when you turn fast. Changes reach a held
+      <p class="note"><b>Steps when editing:</b> BASE and RANGE move by octaves when quantized (semitones with fine steps on),
+        otherwise by 1 V (0.1 V with fine steps on). Small steps go four times further when you turn fast. Changes reach a held
         output at once.</p>
       <p class="note"><b>Gates and triggers:</b> triggers are short pulses (TRIG LEN in the SYS settings, 2 ms by default), at
         least 10 ms apart, so one touch never fires twice.</p>
+
+      <h3 id="padsettings">XY pad settings <small>select a pad, tap A</small></h3>
+      <p>Touch a pad to select it, or with PLAY open hold <kbd>A</kbd> and turn past slider 8 to <span class="v">P1</span> and
+        <span class="v">P2</span>. Its settings are on PLAY (<span class="v">P1 MODE</span> over <span class="v">lorenz</span>);
+        OUT and TIME have nothing for a pad and say <span class="v">on PLAY</span>.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Setting</th><th>Values</th></tr></thead>
+        <tbody>
+          <tr><td>MODE</td><td>xy: X, Y and Z follow the finger · lorenz: X and Y draw the butterfly (x against z) and Z is y,
+            swinging around its middle; the trajectory circles one wing and flips to the other at irregular times ·
+            rossler: X and Y draw the spiral (x against y) and Z is z, low most of the time with a spike once a loop or so</td></tr>
+          <tr><td>RATE</td><td>how fast it runs, in loops per second: 0.010–20 Hz (0.45 Hz to start with)</td></tr>
+          <tr><td>CHAOS</td><td>0–100 %. lorenz: from long spirals with rare flips to frequent, erratic flips (rho 24.8–60) ·
+            rossler: from one clean loop through period doubling (about 25 %) to dense chaos; the classic attractor is near 50 % (c 2.5–9)</td></tr>
+        </tbody>
+      </table></div>
+      <p>While an attractor runs, <b>the finger pulls the trajectory toward itself, and pressure sets how hard</b>: a light
+        touch nudges it, a firmer one bends it toward the finger, and from about half pressure up it is drawn under the
+        finger, pinned at a firm press however fast it runs. Lift, and it flies back onto the attractor from where you
+        left it. The outputs and the pad's LEDs follow the trajectory all the time, touched or not.</p>
+      <p class="note">The nudge of a light touch is measured against the attractor's own speed, so it feels the same at
+        any RATE. Held far off the attractor, the third output can run to the end of its range (Rössler's Z with the
+        finger to the right); it comes back once you let go. A loop recorded on the pad records the finger, so it keeps
+        pulling on an attractor that never repeats exactly.</p>
     </section>
 
     <!-- ============================================================ sequencer -->
@@ -327,37 +360,37 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
         value for each of the four rows A–D, which come out on <span class="j">var 1</span> to <span class="j">var 4</span>.
         Every row has its own length, start, direction, speed and range, so rows run against each other while all of
         them follow the same clock. While any row runs, <span class="j">m.gate</span> gives a trigger on every clock step.</p>
-      <p><b>Start and stop</b> a row with a double tap on its <kbd>SET</kbd> pad, from anywhere; it starts on its first
-        stage and joins the running rows on their next step. A double tap on <kbd>FINE</kbd> starts all rows together,
+      <p><b>Start and stop</b> a row with a double tap on its button <kbd>A</kbd>–<kbd>D</kbd>, from anywhere; it starts on its first
+        stage and joins the running rows on their next step. A tap on <kbd>RUN</kbd> starts all rows together,
         or stops them all. On the idle screen, the encoder steps the stopped rows by hand.</p>
 
       <h3 id="stepview">Step views</h3>
-      <p>Hold <kbd>SET 1</kbd> to <kbd>SET 4</kbd> to open the step view of row A to D. The sliders' LEDs then show that
+      <p>Hold <kbd>A</kbd> to <kbd>D</kbd> to open the step view of row A to D. The sliders' LEDs then show that
         row: each stage's value where it lies in the row's range. The current step has its top LED lit and shows at full
-        brightness, the rest are dimmed. A step view stays open until you tap a <kbd>SET</kbd> pad.</p>
+        brightness, the rest are dimmed. A step view stays open until you tap a row button.</p>
       <div class="tbl"><table class="wrap1">
         <thead><tr><th>In a step view</th><th>Result</th></tr></thead>
         <tbody>
           <tr><td>Touch a slider</td><td>store where you touched into the row at that stage. Only the row changes: the slider's own outputs, its loop and the running sequence stay as they are.</td></tr>
           <tr><td>Hold a slider and turn</td><td>fine-tune that stage; the finger stops writing for the rest of that touch</td></tr>
           <tr><td>Encoder</td><td>row stopped: step by hand · running: pick the stage shown; its top LED stays lit and dims while the step passes through</td></tr>
-          <tr><td>Hold <kbd>FINE</kbd> and turn</td><td>edit the stage on the display: a note when quantized, else a semitone (0.01 V with FINE on)</td></tr>
-          <tr><td>Hold the row's pad and turn</td><td>SHIFT: move the row's window (start and end together), wrapping past 8; with <kbd>FINE</kbd> held too: LEN. The stages inside the window light up.</td></tr>
-          <tr><td>Hold the row's pad</td><td>the row's settings (below); hold again to go back</td></tr>
-          <tr><td>Hold another row's pad</td><td>switch to that row's view</td></tr>
-          <tr><td>Double tap a <kbd>SET</kbd> pad</td><td>start or stop that row</td></tr>
-          <tr><td>Tap a <kbd>SET</kbd> pad</td><td>close the view</td></tr>
+          <tr><td>Hold <kbd>EDIT</kbd> and turn</td><td>edit the stage on the display: a note when quantized, else a semitone (0.01 V with fine steps on)</td></tr>
+          <tr><td>Hold the row's button and turn</td><td>SHIFT: move the row's window (start and end together), wrapping past 8; with <kbd>EDIT</kbd> held too: LEN. The stages inside the window light up.</td></tr>
+          <tr><td>Hold the row's button</td><td>the row's settings (below); hold again to go back</td></tr>
+          <tr><td>Hold another row's button</td><td>switch to that row's view</td></tr>
+          <tr><td>Double tap a row button</td><td>start or stop that row</td></tr>
+          <tr><td>Tap a row button</td><td>close the view</td></tr>
         </tbody>
       </table></div>
       <div class="figs">
-        <figure class="panel" data-fig="seq1"><figcaption>Hold SET 2 for the step view of row B, then touch a slider to write into that stage.</figcaption></figure>
-        <figure class="panel" data-fig="seq2"><figcaption>In the step view, hold SET 2 again for the row's settings; scroll with the encoder, hold FINE and turn to change.</figcaption></figure>
+        <figure class="panel" data-fig="seq1"><figcaption>Hold B for the step view of row B, then touch a slider to write into that stage.</figcaption></figure>
+        <figure class="panel" data-fig="seq2"><figcaption>In the step view, hold B again for the row's settings; scroll with the encoder, hold EDIT and turn to change.</figcaption></figure>
       </div>
       <div class="screens">
         <figure class="lcd" data-top="B  fwd ±" data-bot="C#2 2.08" data-cap="step view"></figure>
         <figure class="lcd" data-top="#6 → B" data-bot="C#2 2.08" data-cap="writing"></figure>
-        <figure class="lcd" data-top="B SHIFT" data-bot="from   3" data-cap="pad held + turn"></figure>
-        <figure class="lcd" data-top="B RUN" data-bot="" data-cap="double tap SET 2"></figure>
+        <figure class="lcd" data-top="B SHIFT" data-bot="from   3" data-cap="B held + turn"></figure>
+        <figure class="lcd" data-top="B RUN" data-bot="" data-cap="double tap B"></figure>
       </div>
 
       <h3 id="rowsettings">Row settings</h3>
@@ -380,11 +413,10 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
       <p class="note">While DIR, SHIFT or LEN is shown, the LEDs show the row's window. The settings close after 5 seconds
         without input, back to the step view.</p>
 
-      <h3 id="seqsettings">Sequencer settings <span class="j" style="font-size:14px">tap SET 4</span></h3>
+      <h3 id="seqsettings">Sequencer settings <span class="j" style="font-size:14px">tap D</span></h3>
       <div class="tbl"><table>
         <thead><tr><th>Setting</th><th>Values</th></tr></thead>
         <tbody>
-          <tr><td>RUN</td><td>stop or run all rows; every row starts on its first stage</td></tr>
           <tr><td>CLOCK</td><td>int: the internal tempo · #1–#8: a step on every rising gate of that slider. An LFO slider with a cycle gate becomes a clock you play by finger, a slider with triggers a tap clock, a recorded loop a rhythm.</td></tr>
           <tr><td>BPM</td><td>20–300</td></tr>
           <tr><td>DIV</td><td>what one step is: 1/1, 1/2, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32. With a slider clock, one pulse is one step and the tempo for synced LFOs and fast rows is measured from it.</td></tr>
@@ -401,17 +433,17 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
       <div class="tbl"><table class="wrap1">
         <thead><tr><th>Action</th><th>Result</th></tr></thead>
         <tbody>
-          <tr><td>Tap <kbd>HOLD</kbd></td><td>arm recording: a blinking dot on the display, the top LEDs of the sliders blink. Tap again to disarm.</td></tr>
+          <tr><td>Tap <kbd>REC</kbd></td><td>arm recording: a blinking dot on the display, the top LEDs of the sliders blink. Tap again to disarm.</td></tr>
           <tr><td>Touch a control while armed</td><td>recording starts; its LEDs blink and the dot stays lit</td></tr>
-          <tr><td>Tap <kbd>HOLD</kbd> while recording</td><td>the recording loops; the LEDs flash at every loop start</td></tr>
-          <tr><td>Hold <kbd>HOLD</kbd> (not armed) and touch a control</td><td>record it for as long as HOLD is held; letting go loops it</td></tr>
-          <tr><td>Armed: hold <kbd>HOLD</kbd> and touch a loop</td><td>stop that loop; the touch itself plays nothing</td></tr>
-          <tr><td>Armed: keep holding <kbd>HOLD</kbd></td><td>after 0.8 s a bar fills over 1.5 s, then all loops stop; letting go earlier cancels</td></tr>
+          <tr><td>Tap <kbd>REC</kbd> while recording</td><td>the recording loops; the LEDs flash at every loop start</td></tr>
+          <tr><td>Hold <kbd>REC</kbd> (not armed) and touch a control</td><td>record it for as long as REC is held; letting go loops it</td></tr>
+          <tr><td>Armed: hold <kbd>REC</kbd> and touch a loop</td><td>stop that loop; the touch itself plays nothing</td></tr>
+          <tr><td>Armed: keep holding <kbd>REC</kbd></td><td>after 0.8 s a bar fills over 1.5 s, then all loops stop; letting go earlier cancels</td></tr>
         </tbody>
       </table></div>
       <div class="figs">
-        <figure class="panel" data-fig="rec1"><figcaption>Tap HOLD to arm, play a slider, and tap HOLD again to loop what you played.</figcaption></figure>
-        <figure class="panel" data-fig="rec2"><figcaption>Or hold HOLD while you play: the slider records for as long as HOLD is held, and loops when you let go.</figcaption></figure>
+        <figure class="panel" data-fig="rec1"><figcaption>Tap REC to arm, play a slider, and tap REC again to loop what you played.</figcaption></figure>
+        <figure class="panel" data-fig="rec2"><figcaption>Or hold REC while you play: the slider records for as long as REC is held, and loops when you let go.</figcaption></figure>
       </div>
       <p class="note">Touching a looping control plays live over it while you touch. With a menu open, a touch only
         selects the slider and its loop keeps playing, so you can change its settings while it loops. A gate held across
@@ -422,23 +454,23 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
     <!-- ============================================================ saving -->
     <section id="saving">
       <h2>Saving and loading</h2>
-      <p>Motus keeps four patch slots. A slot holds every slider's settings, the sequencer's stage values and its
+      <p>Motus keeps four patch slots. A slot holds every slider's and pad's settings, the sequencer's stage values and its
         settings, including every row's. The SYS settings are global and saved with every save. The unit starts with the
         slot saved or loaded last.</p>
       <p><b>Autosave</b> (off by default, switch it on in the SYS settings): after 10 seconds without touching anything, changes are saved into the current slot by
         themselves, and the <span class="v">*</span> disappears. After loading a
-        template, autosave waits until you SAVE or LOAD yourself, so a template never overwrites your slot.</p>
+        template, autosave waits until you save or load a slot yourself, so a template never overwrites your slot.</p>
       <div class="tbl"><table>
         <thead><tr><th>Action</th><th>Result</th></tr></thead>
         <tbody>
-          <tr><td>Tap <kbd>SAVE</kbd></td><td><span class="v">SAVE 2?</span>: turn to pick a slot (<span class="v">replace</span>, <span class="v">empty</span> or <span class="v">current</span>), tap SAVE again to store</td></tr>
-          <tr><td>Tap <kbd>LOAD</kbd></td><td><span class="v">LOAD 2?</span>: turn to pick a slot, tap LOAD again to load it</td></tr>
-          <tr><td>Cancel</td><td>a SET or FINE pad, or 5 s without input</td></tr>
+          <tr><td>Tap <kbd>PATCH</kbd></td><td><span class="v">LOAD 2?</span>: turn to pick a slot or a template, tap PATCH again to load it</td></tr>
+          <tr><td>Hold <kbd>PATCH</kbd> (0.5 s)</td><td><span class="v">SAVE 2?</span>: turn to pick a slot (<span class="v">replace</span>, <span class="v">empty</span> or <span class="v">current</span>), tap PATCH to store. Also from the <span class="v">LOAD</span> prompt.</td></tr>
+          <tr><td>Cancel</td><td>a row button or <kbd>EDIT</kbd>, or 5 s without input</td></tr>
         </tbody>
       </table></div>
       <h3>Templates</h3>
-      <p>After the four slots, LOAD offers starting points (<span class="v">INIT?</span>). A template replaces all slider
-        settings, clears the sequencer and its values, and starts every slider from the bottom (a fader at its BASE, LFOs
+      <p>After the four slots, the <span class="v">LOAD</span> prompt offers starting points (<span class="v">INIT?</span>). A template replaces all slider
+        settings (and sets both pads back to xy), clears the sequencer and its values, and starts every slider from the bottom (a fader at its BASE, LFOs
         from the start of their cycle); your slots are untouched until you save over one.</p>
       <div class="tbl"><table>
         <thead><tr><th>Template</th><th>Sliders</th></tr></thead>
@@ -453,7 +485,7 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
 
     <!-- ============================================================ system -->
     <section id="system">
-      <h2>System settings <small>tap SET 4, after the sequencer's</small></h2>
+      <h2>System settings <small>hold RUN</small></h2>
       <div class="tbl"><table>
         <thead><tr><th>Setting</th><th>Values</th></tr></thead>
         <tbody>
@@ -475,27 +507,29 @@ footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line);
       <div class="tbl"><table>
         <thead><tr><th>Gesture</th><th>Where</th><th>Result</th></tr></thead>
         <tbody>
-          <tr><td>Tap <kbd>SET 1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> / <kbd>4</kbd></td><td class="mode">anywhere</td><td>PLAY, OUT, CTRL, SEQ + SYS page (tap again: close)</td></tr>
-          <tr><td>Tap a <kbd>SET</kbd> pad</td><td class="mode">step view, row settings</td><td>close, back to the idle screen</td></tr>
-          <tr><td>Double tap <kbd>SET 1–4</kbd></td><td class="mode">anywhere</td><td>start or stop row A–D</td></tr>
-          <tr><td>Hold <kbd>SET 1–4</kbd></td><td class="mode">anywhere</td><td>step view of row A–D</td></tr>
-          <tr><td>Hold the row's <kbd>SET</kbd></td><td class="mode">step view</td><td>the row's settings (again: back)</td></tr>
+          <tr><td>Tap <kbd>A</kbd> / <kbd>B</kbd> / <kbd>C</kbd> / <kbd>D</kbd></td><td class="mode">anywhere</td><td>PLAY, OUT, TIME, SEQ page (tap again: close)</td></tr>
+          <tr><td>Tap a row button</td><td class="mode">step view, row settings</td><td>close, back to the idle screen</td></tr>
+          <tr><td>Double tap <kbd>A</kbd>–<kbd>D</kbd></td><td class="mode">anywhere</td><td>start or stop row A–D</td></tr>
+          <tr><td>Hold <kbd>A</kbd>–<kbd>D</kbd></td><td class="mode">anywhere</td><td>step view of row A–D</td></tr>
+          <tr><td>Hold the row's button</td><td class="mode">step view</td><td>the row's settings (again: back)</td></tr>
           <tr><td>Encoder</td><td class="mode">settings</td><td>scroll the settings</td></tr>
-          <tr><td>Hold <kbd>FINE</kbd> + turn</td><td class="mode">settings</td><td>change the value</td></tr>
-          <tr><td>Hold the page's <kbd>SET</kbd> + turn</td><td class="mode">PLAY, OUT, CTRL</td><td>choose the slider</td></tr>
+          <tr><td>Hold <kbd>EDIT</kbd> + turn</td><td class="mode">settings</td><td>change the value</td></tr>
+          <tr><td>Hold the page's button + turn</td><td class="mode">PLAY, OUT, TIME</td><td>choose the slider (on PLAY past 8: an XY pad)</td></tr>
           <tr><td>Touch a slider</td><td class="mode">step view</td><td>write into the row</td></tr>
           <tr><td>Hold a slider + turn</td><td class="mode">step view</td><td>edit that stage</td></tr>
           <tr><td>Encoder</td><td class="mode">step view</td><td>stopped: step by hand · running: pick a stage</td></tr>
-          <tr><td>Hold <kbd>FINE</kbd> + turn</td><td class="mode">step view</td><td>edit the shown stage</td></tr>
-          <tr><td>Hold the row's <kbd>SET</kbd> + turn</td><td class="mode">step view</td><td>shift the row (with FINE: its length)</td></tr>
+          <tr><td>Hold <kbd>EDIT</kbd> + turn</td><td class="mode">step view</td><td>edit the shown stage</td></tr>
+          <tr><td>Hold the row's button + turn</td><td class="mode">step view</td><td>shift the row (with EDIT: its length)</td></tr>
           <tr><td>Encoder</td><td class="mode">idle</td><td>step the stopped rows by hand</td></tr>
-          <tr><td>Tap <kbd>FINE</kbd></td><td class="mode">anywhere</td><td>fine steps on or off</td></tr>
-          <tr><td>Double tap <kbd>FINE</kbd></td><td class="mode">anywhere</td><td>start or stop all rows</td></tr>
-          <tr><td>Tap <kbd>HOLD</kbd></td><td class="mode">anywhere</td><td>arm, disarm, or close a recording into a loop</td></tr>
-          <tr><td>Hold <kbd>HOLD</kbd> + touch</td><td class="mode">not armed</td><td>record while held</td></tr>
-          <tr><td>Hold <kbd>HOLD</kbd> + touch a loop</td><td class="mode">armed</td><td>stop that loop</td></tr>
-          <tr><td>Keep holding <kbd>HOLD</kbd></td><td class="mode">armed</td><td>stop all loops</td></tr>
-          <tr><td>Tap <kbd>SAVE</kbd> / <kbd>LOAD</kbd>, turn, tap</td><td class="mode">anywhere</td><td>store or load a slot, or load a template</td></tr>
+          <tr><td>Tap <kbd>EDIT</kbd></td><td class="mode">anywhere</td><td>fine steps on or off</td></tr>
+          <tr><td>Tap <kbd>RUN</kbd></td><td class="mode">anywhere</td><td>start or stop all rows</td></tr>
+          <tr><td>Hold <kbd>RUN</kbd></td><td class="mode">anywhere</td><td>SYS settings (again: close)</td></tr>
+          <tr><td>Tap <kbd>REC</kbd></td><td class="mode">anywhere</td><td>arm, disarm, or close a recording into a loop</td></tr>
+          <tr><td>Hold <kbd>REC</kbd> + touch</td><td class="mode">not armed</td><td>record while held</td></tr>
+          <tr><td>Hold <kbd>REC</kbd> + touch a loop</td><td class="mode">armed</td><td>stop that loop</td></tr>
+          <tr><td>Keep holding <kbd>REC</kbd></td><td class="mode">armed</td><td>stop all loops</td></tr>
+          <tr><td>Tap <kbd>PATCH</kbd>, turn, tap</td><td class="mode">anywhere</td><td>load a slot or a template</td></tr>
+          <tr><td>Hold <kbd>PATCH</kbd>, turn, tap</td><td class="mode">anywhere</td><td>save into a slot</td></tr>
         </tbody>
       </table></div>
     </section>
@@ -547,8 +581,7 @@ document.querySelectorAll('figure.lcd').forEach(f => {
     (f.dataset.cap ? `<figcaption>${f.dataset.cap}</figcaption>` : '');
 });
 
-// Panel figures: crops of panel.png with gestures drawn on top, in panel points (595 x 364, origin bottom left),
-// the same coordinates as docs/build_manual.py.
+// Panel figures: crops of panel-labelled.png with gestures drawn on top, in panel points (595 x 364, origin bottom left).
 const PW = 595.28, PH = 364.25;
 const SX = [128.6, 173.5, 218.5, 263.4, 308.3, 353.3, 398.4, 443.4], ST = 177, SB = 28;
 const PAD = [[55.8, 192.9], [55.8, 75.6]];
@@ -571,7 +604,7 @@ const FIGS = {
   menu1: [RIGHT, [['finger', SX[5], sy(.55), 'touch: select', 'r', false, '1'],
     ['finger', ...SET[0], 'tap', 'b', false, '2'], ['finger', ...FINE, 'hold', 'l', true, '3'],
     ['turn', 'turn: change'], ['lcd', '#6 QUANT', '   major']]],
-  menu2: [RIGHT, [['finger', ...SET[0], 'hold SET 1', 'b', true], ['turn', 'turn: choose slider'],
+  menu2: [RIGHT, [['finger', ...SET[0], 'hold A', 'b', true], ['turn', 'turn: choose slider'],
     ['glow', 5], ['lcd', '#6 RANGE', '+24 st']]],
   seq1: [RIGHT, [['finger', ...SET[1], 'hold', 'b', true, '1'],
     ['finger', SX[5], sy(.7), 'touch: write', 'r', false, '2'], ['lcd', '#6 → B', 'C#2 2.08']]],
@@ -641,7 +674,7 @@ function figure(crop, ops) {
     }
   }
   return `<svg viewBox="${x0} ${Y(y1)} ${x1 - x0} ${y1 - y0}" role="img" aria-hidden="true">` +
-    `<image href="panel.png" x="0" y="0" width="${PW}" height="${PH}"/>${out}${tags}</svg>`;
+    `<image href="panel-labelled.png" x="0" y="0" width="${PW}" height="${PH}"/>${out}${tags}</svg>`;
 }
 // after the fonts load, so the label plates fit their text
 document.fonts.ready.then(() => document.querySelectorAll('figure.panel').forEach(f => {

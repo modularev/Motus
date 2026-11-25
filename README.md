@@ -9,43 +9,41 @@ Motus is a capacitive touch controller for modular synthesizers. It turns finger
 | Section | Outputs | What they do |
 |---|---|---|
 | Sliders 1–8 | `position`, `force`, `gate` | The slider's output (a voltage, a note or an LFO, see slider modes), pressure of the finger, gate while touched. The output and LEDs hold their value after release. |
-| XY pads 1–2 | `X1` `Y1` `Z1`, `X2` `Y2` `Z2` | Finger position on the pad and its pressure (Z). The pad LEDs glow around the finger. |
+| XY pads 1–2 | `X1` `Y1` `Z1`, `X2` `Y2` `Z2` | Finger position on the pad and its pressure (Z), or a Lorenz or Rössler attractor the finger pulls on (see XY pads). The pad LEDs glow around the finger, or follow the attractor. |
 | Master | `m.pos`, `m.force`, `m.gate` | Average position output and pressure of all sliders that are touched, looping or running an LFO, so it stays in range; holds its value when none are. Gate while any slider gate is on, or the sequencer's step trigger while it runs. |
 | Sequencer | `var 1`–`var 4` | The four rows of the step sequencer, see below. |
 
 The display shows the touched slider or pad with its value (a voltage, note or LFO rate), the menu while it is open, or the sequencer state when idle.
 
-### Menu
+### Buttons and menu
 
-| `SET 1`–`SET 4` | Result |
+The eight touch buttons are labelled for what they do (relabelled with 6 mm tape strips, see `docs/labels/`; the original panel print is in brackets):
+
+| Button | Tap | Double tap | Hold (0.5 s) |
+|---|---|---|---|
+| `A·PLAY` `B·OUT` `C·TIME` `D·SEQ` (`SET 1`–`SET 4`) | open that settings page; tap again, or in a step view or a row's settings, to close it | start or stop sequencer row A–D (the row on `var 1`–`var 4` above the button), from anywhere; whatever was open stays as it was | the step view of row A–D (see Sequencer); held there again: the row's settings |
+| `EDIT` (`FINE`) | toggle fine steps for exact values (± on the display), until the menu closes | | with the encoder: change the value shown |
+| `REC` (`HOLD`) | arm recording (see Recording) | | with a touch: record while held |
+| `RUN` (`LOAD`) | start all rows, or stop them if any runs | | open the SYS settings; held again: close them |
+| `PATCH` (`SAVE`) | `LOAD 2?`: turn to pick a slot or template, tap again to load | | `SAVE 2?`: turn to pick a slot, tap to save (the second line says `replace`, `empty` or `current`) |
+
+The encoder scrolls through the settings of the page that is open; hold `EDIT` and turn to change a value. Touching a slider or pad selects what PLAY, OUT and TIME edit, and it keeps playing as usual. Holding the open page's button and turning chooses the slider without touching it (on PLAY, past slider 8 come the XY pads `P1` and `P2`). While a row button is held, a touch only selects and leaves the outputs unchanged; a button held while the encoder turns or a control is touched is a modifier, so letting go is neither a tap nor a hold. Settings close after 5 seconds without input (a row's settings back to its step view); a step view stays open until you tap a row button.
+
+| Page | Settings |
 |---|---|
-| Tap | open the settings page below; tap again to close it. In a step view or a row's settings, a tap on any SET pad closes it |
-| Double tap | start or stop sequencer row A–D (`SET 1` is row A), from anywhere; the first tap acts as a tap at once, so its page opens (or a view closes) as well |
-| Hold (0.5 s) | open the step view of row A–D (see Sequencer); hold it there again for the row's settings |
-| With settings open: encoder | scroll through the settings |
-| With settings open: tap the same pad | close the settings |
-| With settings open: hold `FINE` and turn | change the value, both ways |
-| With settings open: tap another pad | switch to that pad's settings page |
+| PLAY (`A`) | how the finger plays the touched slider: LFO off or on, then the settings of that mode (see Slider modes); for an XY pad its MODE, RATE and CHAOS (see XY pads) |
+| OUT (`B`) | the slider's output: QUANT, ROOT, BASE, RANGE |
+| TIME (`C`) | the slider's output processing in time: SLEW, SLANT, DELAY, LOOP, FREEZE (see TIME) |
+| SEQ (`D`) | the sequencer: CLOCK, BPM, DIV, TOUCH |
+| SYS (hold `RUN`) | the global settings (see System settings) |
 
-A SET pad held while the encoder turns or a slider is touched acts as a modifier, so letting go is neither a tap nor a hold. Touching a slider selects which slider is edited: normally it keeps playing as usual, while a SET pad is held the touch only selects and leaves the slider's outputs unchanged. Settings close after 5 seconds without input (a row's settings back to its step view); a step view stays open until you tap a SET pad.
+In the `LOAD` prompt, four templates for a fresh start come after the slots (`INIT?`): faders (8 plain 0–8 V faders), lfos (8 sine LFOs with clock gates, their phases spread 45° apart), keys (8 quantized keyboards, C major over two octaves) and split (4 keys, 4 LFOs 90° apart). A template also clears the sequencer and its values, sets both pads to `xy`, starts every slider from the bottom (a fader at its BASE, LFOs from the start of their cycle), and stays unsaved until you save it. A row button, `EDIT`, or 5 s without input cancels either prompt; holding `PATCH` in the `LOAD` prompt switches to `SAVE`.
 
-A slot holds a patch: every slider's settings, the sequencer's stage values and settings. The SYS settings are global and saved with every save. The idle screen shows whether the sequencer runs, with its tempo or clock slider (`RUN 120`, `RUN  #3`, `STOP 120`). While running, the second line has a tube per row A–D, one pixel row per step and as tall as the row's length, filled up to its current step (empty while that row is stopped); when stopped, it shows the current slot (`Slot 2`). A dot shows while recording and `*` while there are unsaved changes. The unit starts with the slot saved or loaded last and shows it for a second, as does LOAD. Recordings are not saved.
-
-| Tap | Page | Settings |
-|---|---|---|
-| `SET 1` | PLAY | how the finger plays the touched slider: LFO off or on, then the settings of that mode (see Slider modes) |
-| `SET 2` | OUT | the slider's output: QUANT, ROOT, BASE, RANGE |
-| `SET 3` | CTRL | the slider's output processing: SLEW, SLANT, DELAY, LOOP, FREEZE (see CTRL) |
-| `SET 4` | SEQ | the sequencer (run, clock, tempo, touch), followed by the SYS settings (see below): scroll past TOUCH, or turn back from RUN |
-
-On PLAY, OUT and CTRL, hold that page's SET pad and turn to choose the slider without touching it.
-| `FINE` | | tap: toggle small encoder steps for exact values (± on the display), until the menu closes; double tap: start or stop all rows, from anywhere; hold and turn: change a setting's value |
-| `SAVE` | | tap: `SAVE 2?`, turn the encoder to pick one of 4 slots, tap again to store (the second line says `replace`, `empty` or `current`) |
-| `LOAD` | | tap: `LOAD 2?`, pick the slot, tap again to load it. After the slots come four templates for a fresh start (`INIT?`): faders (8 plain 0–8 V faders), lfos (8 sine LFOs with clock gates, their phases spread 45° apart), keys (8 quantized keyboards, C major over two octaves) and split (4 keys, 4 LFOs 90° apart); a template also clears the sequencer and its values, starts every slider from the bottom (a fader at its BASE, LFOs from the start of their cycle), and stays unsaved until you save it. A SET or `FINE` pad, or 5 s without input, cancels either prompt |
+A slot holds a patch: every slider's and pad's settings, the sequencer's stage values and settings. The SYS settings are global and saved with every save. The idle screen shows whether the sequencer runs, with its tempo or clock slider (`RUN 120`, `RUN  #3`, `STOP 120`). While running, the second line has a tube per row A–D, one pixel row per step and as tall as the row's length, filled up to its current step (empty while that row is stopped); when stopped, it shows the current slot (`Slot 2`). A dot shows while recording and `*` while there are unsaved changes. The unit starts with the slot saved or loaded last and shows it for a second, as does a load. Recordings are not saved.
 
 ### System settings
 
-The last eight settings on the `SET 4` page, after the sequencer's.
+Hold `RUN` to open them, and again to close them.
 
 | Setting | Values |
 |---|---|
@@ -56,13 +54,13 @@ The last eight settings on the `SET 4` page, after the sequencer's.
 | BRIGHT | 10–100 %: LED brightness |
 | TRIG LEN | 1–20 ms: trigger length |
 | LOOP TRG | on or off: a gate held across a loop start drops briefly to retrigger |
-| AUTOSAVE | off (default) or on: after 10 s without touching anything, changes are saved into the current slot. Not after loading a template, until you SAVE or LOAD yourself |
+| AUTOSAVE | off (default) or on: after 10 s without touching anything, changes are saved into the current slot. Not after loading a template, until you save or load a slot yourself |
 
 ### Sequencer
 
-A step sequencer in the spirit of the Serge TKB: the 8 sliders are 8 stages, and every stage has four voltages, the rows A–D on `var 1`–`var 4`. On the screen, rows are A–D and sliders #1–#8. Every row starts and stops on its own (double tap its SET pad), and the running rows step together on the clock. While any row runs, `m.gate` sends a trigger on every step and the top LED of the current stage (of the first running row, or of the row being written) is lit.
+A step sequencer in the spirit of the Serge TKB: the 8 sliders are 8 stages, and every stage has four voltages, the rows A–D on `var 1`–`var 4`. On the screen, rows are A–D and sliders #1–#8. Every row starts and stops on its own (double tap its row button `A`–`D`; `RUN` starts or stops them all), and the running rows step together on the clock. While any row runs, `m.gate` sends a trigger on every step and the top LED of the current stage (of the first running row, or of the row being written) is lit.
 
-**Step views:** hold `SET 1`–`SET 4` to open the step view of row A–D. The sliders' LEDs show the row's values, each where it lies in the row's range, and touching a slider stores its position, in the row's BASE, RANGE and QUANT, into the row at that stage; touches do not move the running sequence and leave the slider's own outputs (position, force, gate) and any loop unchanged. While the row is stopped, the encoder steps the stopped rows by hand, as on the idle screen, and the view shows the current step; while running, it browses the stages. Holding `FINE` while turning edits the stage shown (semitones, 0.01 V with `FINE` on). Holding the row's pad while turning shifts the row's start and end together, wrapping past 8 (its SHIFT), and with `FINE` held too it changes the row's length; meanwhile the stages inside the row's window light up fully, the playing one brightest, and the others go dark. Holding the row's pad without turning opens the row's settings (below); holding another row's pad switches to that row's view. Holding a slider and turning edits that slider's step; from then on the finger no longer writes during that touch. The current step has its top LED lit and shows at full brightness, the others are dimmed. While the row runs, the stage shown (picked with the encoder) keeps its top LED lit as well, and that LED dims while the step passes through it. The display shows the row and its direction over the shown stage's value (`A  fwd` over `C#2 2.08`; while writing, `#3 → A`), or the start or length while they are changed.
+**Step views:** hold `A`–`D` to open the step view of row A–D. The sliders' LEDs show the row's values, each where it lies in the row's range, and touching a slider stores its position, in the row's BASE, RANGE and QUANT, into the row at that stage; touches do not move the running sequence and leave the slider's own outputs (position, force, gate) and any loop unchanged. While the row is stopped, the encoder steps the stopped rows by hand, as on the idle screen, and the view shows the current step; while running, it browses the stages. Holding `EDIT` while turning edits the stage shown (semitones, 0.01 V with fine steps on). Holding the row's button while turning shifts the row's start and end together, wrapping past 8 (its SHIFT), and with `EDIT` held too it changes the row's length; meanwhile the stages inside the row's window light up fully, the playing one brightest, and the others go dark. Holding the row's button without turning opens the row's settings (below); holding another row's button switches to that row's view. Holding a slider and turning edits that slider's step; from then on the finger no longer writes during that touch. The current step has its top LED lit and shows at full brightness, the others are dimmed. While the row runs, the stage shown (picked with the encoder) keeps its top LED lit as well, and that LED dims while the step passes through it. The display shows the row and its direction over the shown stage's value (`A  fwd` over `C#2 2.08`; while writing, `#3 → A`), or the start or length while they are changed.
 
 **Row settings** (hold the row's pad in its step view; hold it again to go back):
 
@@ -79,24 +77,25 @@ A step sequencer in the spirit of the Serge TKB: the 8 sliders are 8 stages, and
 
 Every stage holds a position within its row's range, like a slider's: touching a slider stores where you touched it, and the row's BASE, RANGE and QUANT turn that into the output. So changing them reshapes the whole row at once, while it plays, and the stages keep their shape (e.g. turn RANGE up to widen a melody, BASE to transpose it). While DIR, SHIFT or LEN is shown, the LEDs show the row's window; otherwise the row's values in its range. The keys template sets every row to C major over two octaves from C2; the others leave the rows unquantized over 0–8 V.
 
-**Sequencer** (tap `SET 4`):
+**Sequencer** (tap `D·SEQ`):
 
 | Setting | Values |
 |---|---|
-| RUN | stop or run all rows (or double tap `FINE`); every row starts on its first stage. Turning the encoder on the idle screen steps every stopped row forward or back by hand |
 | CLOCK | int (the internal tempo), or #1–#8: a step on every rising gate of that slider, so an LFO slider with a cycle gate is a playable clock, a slider with triggers a tap clock, and a recorded loop a rhythm |
 | BPM | 20–300 |
 | DIV | what one step is: 1/1, 1/2, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32. With a slider clock, one pulse counts as one step, and the tempo for synced LFOs is measured from it |
 | TOUCH | jump: a touch makes every row start at the slider's stage from then on (it sets their SHIFT); ignore: play the sliders freely |
 
+Tap `RUN` to start all rows, every one on its first stage, or to stop them. Turning the encoder on the idle screen steps every stopped row forward or back by hand.
+
 ### Slider modes
 
-Every slider has two modes, switched with LFO off or on at the top of its PLAY page (tap `SET 1`), that share the same settings for their output range and quantizer (OUT, `SET 2`) and output processing (CTRL, `SET 3`):
+Every slider has two modes, switched with LFO off or on at the top of its PLAY page (tap `A·PLAY`), that share the same settings for their output range and quantizer (OUT, `B`) and output processing in time (TIME, `C`):
 
 - **SLIDE**: the finger sets the output. Without a quantizer the output spans the voltage range, like a fader; with one it plays the scale notes in the range, like a keyboard strip (and, swept, an arpeggio).
 - **LFO**: the output runs an LFO, which keeps running after release; the finger sets its rate or, with SETS depth, its depth.
 
-**PLAY** (`SET 1`):
+**PLAY** (`A`):
 
 | Setting | Modes | Values |
 |---|---|---|
@@ -112,7 +111,7 @@ Every slider has two modes, switched with LFO off or on at the top of its PLAY p
 | RESET | LFO | free running, or restart on touch |
 | GATE | LFO | while touched, high for the first half of every cycle (a clock), a trigger at every cycle start, or a trigger on every new quantized note |
 
-**OUT** (`SET 2`), both modes:
+**OUT** (`B`), both modes:
 
 | Setting | Values |
 |---|---|
@@ -121,19 +120,31 @@ Every slider has two modes, switched with LFO off or on at the top of its PLAY p
 | BASE | the output at the bottom of the slider, or the LFO's low point, in volts (with the note name when quantized) |
 | RANGE | from BASE to the top of the slider or the LFO's high point: volts, or semitones when quantized (24 st = two octaves); negative inverts |
 
-**CTRL** (`SET 3`), both modes: a CV processor after the mode, after the CONTROL modulator of the GRM Ateliers. The mode's output (the finger's value, or the LFO) goes through a delay line with feedback and then a slew. Only the position output is processed: gate and force stay live, so an echo plays against the finger's gate. With DELAY off and SLEW off the output passes straight through.
+**TIME** (`C`), both modes: a CV processor after the mode, after the CONTROL modulator of the GRM Ateliers. The mode's output (the finger's value, or the LFO) goes through a delay line with feedback and then a slew. Only the position output is processed: gate and force stay live, so an echo plays against the finger's gate. With DELAY off and SLEW off the output passes straight through.
 
 | Setting | Values |
 |---|---|
-| SLEW | glide between values, off to 10 s, continuing after release; coarse steps 5 ms … 10 s, about 1 % steps with `FINE`. On an LFO it rounds off square and S&H steps (smooth random) |
+| SLEW | glide between values, off to 10 s, continuing after release; coarse steps 5 ms … 10 s, about 1 % with fine steps. On an LFO it rounds off square and S&H steps (smooth random) |
 | SLANT | −100 … +100 %: rise time against fall time. 0 is symmetric; positive makes rises slower (up to twice SLEW) and falls faster (instant at +100 %), negative the other way round |
-| DELAY | off to 8 s: the output repeats the input this much later (1 ms resolution); coarse steps 10 ms … 8 s, about 1 % with `FINE` |
+| DELAY | off to 8 s: the output repeats the input this much later (1 ms resolution); coarse steps 10 ms … 8 s, about 1 % with fine steps |
 | LOOP | 0–100 %: how much of the delayed output is fed back. Low values give echoes that fade into the held value, 100 % loops the last DELAY endlessly |
 | FREEZE | off; lift: while the slider is untouched, the last DELAY loops at 100 % (play a gesture, let go, and it repeats until the next touch); touch: it loops while the slider is touched (on an LFO: hold the slider to capture a stretch of the waveform) |
 
 A quantized slider is quantized again after the line, so echoes and loops stay in the scale, and the slew then glides between notes. A slider with a DELAY joins the master outputs like an LFO, since its output keeps moving after release, and its LEDs show the output rather than the finger.
 
-BASE and RANGE step by octaves when quantized (semitones with `FINE`), otherwise by 1 V (0.1 V with `FINE`). Small steps go four times further when turning fast. Settings changes reach a held output at once. A little hysteresis keeps a resting finger from flickering between notes. Triggers are short pulses (TRIG LEN in the SYS settings on `SET 4`, 2 ms by default), timed by an interrupt independent of the sensor scan, and at least 10 ms apart, so one touch never fires twice. The LEDs show a bar, a dot at the note when quantized, or the LFO's waveform; the display shows the voltage, the note or the LFO rate.
+BASE and RANGE step by octaves when quantized (semitones with fine steps), otherwise by 1 V (0.1 V with fine steps). Small steps go four times further when turning fast. Settings changes reach a held output at once. A little hysteresis keeps a resting finger from flickering between notes. Triggers are short pulses (TRIG LEN in the SYS settings, 2 ms by default), timed by an interrupt independent of the sensor scan, and at least 10 ms apart, so one touch never fires twice. The LEDs show a bar, a dot at the note when quantized, or the LFO's waveform; the display shows the voltage, the note or the LFO rate.
+
+### XY pads
+
+A pad either follows the finger (`xy`) or runs a chaotic attractor (`lorenz`, `rossler`) that moves on its own. Select the pad (touch it, or with PLAY open hold `A` and turn past slider 8) and open PLAY (`A`); OUT and TIME have nothing for a pad (`on PLAY`):
+
+| Setting | Values |
+|---|---|
+| MODE | `xy`: X, Y and Z follow the finger, as before. `lorenz`: X and Y draw the butterfly (x against z), Z is y, swinging around its middle; the trajectory circles one wing and flips to the other at irregular times. `rossler`: X and Y draw the spiral (x against y), Z is z, low most of the time with a spike once a loop or so |
+| RATE | how fast it runs, in loops per second: 0.010–20 Hz, exponential (fine steps: 1 of 100, else 5). Default 0.45 Hz |
+| CHAOS | 0–100 %. `lorenz`: rho from 24.8 (long spirals, rare flips) to 60 (frequent, erratic flips). `rossler`: c from 2.5 (a single clean loop) through period doubling (about 25 %) to dense chaos; the classic attractor is near 50 % |
+
+With an attractor running, the finger pulls the trajectory toward itself, and pressure sets how hard: a light touch nudges it (relative to its own speed, so the same at any RATE), a firmer one bends it toward the finger, and from about half pressure up it is drawn under the finger, pinned at a firm press however fast it runs. Lift and it flies back onto the attractor from where you left it. Held far off the attractor, the third variable can run to the end of its range (Rössler's z with x held to the right); it comes back once released. The outputs follow the trajectory all the time, touched or not, and the pad's LEDs glow where it is. A recorded loop on the pad records the finger, so the loop keeps pulling on an attractor that never repeats exactly. Saved with the slot; a template sets both pads back to `xy`.
 
 ### Two fingers
 
@@ -143,12 +154,12 @@ A second finger on a slider or pad makes the value jump to it; lifting it jumps 
 
 | Action | Result |
 |---|---|
-| Tap `HOLD` | arm recording (a blinking dot on the display, top LEDs of the sliders blink); tap again to disarm |
+| Tap `REC` | arm recording (a blinking dot on the display, top LEDs of the sliders blink); tap again to disarm |
 | Touch a slider or pad while armed | recording starts; everything is recorded, including lifts and pauses, so rhythms loop too. The control's LEDs blink while recording and the dot stays lit. |
-| Tap `HOLD` while recording | the recording loops (20 seconds at most) on that control's outputs and LEDs; the LEDs flash at every loop start |
-| Hold `HOLD` (not armed) + touch a control | record it for as long as `HOLD` is held; letting go loops it |
-| Armed: hold `HOLD` + touch a looping control | stop that loop; the touch itself plays nothing |
-| Armed or recording: keep holding `HOLD` | after 0.8 s a bar fills over 1.5 s, then all loops stop; letting go earlier cancels |
+| Tap `REC` while recording | the recording loops (20 seconds at most) on that control's outputs and LEDs; the LEDs flash at every loop start |
+| Hold `REC` (not armed) + touch a control | record it for as long as `REC` is held; letting go loops it |
+| Armed: hold `REC` + touch a looping control | stop that loop; the touch itself plays nothing |
+| Armed or recording: keep holding `REC` | after 0.8 s a bar fills over 1.5 s, then all loops stop; letting go earlier cancels |
 
 A slider records position, force and gate, a pad X, Y and Z, including two-finger jumps. Every slider and pad can loop its own recording at the same time. Touching a looping control plays live over it while you touch; with the menu open, a touch only selects the slider and the loop keeps playing, so its settings can be changed while it loops. A gate held across the loop start drops briefly to retrigger envelopes. Recordings are not kept over power-off.
 
@@ -184,7 +195,7 @@ The firmware is a PlatformIO project in `software/`. Its library dependencies ar
 cd software
 pio run -t upload                      # build and flash
 pio run -e teensy40_debug -t upload    # debug build with a serial data stream
-pio run -e teensy40_dactest -t upload  # DAC test: SET 1-4 set every output to 0, 1365, 2730 or 4095
+pio run -e teensy40_dactest -t upload  # DAC test: A-D set every output to 0, 1365, 2730 or 4095
 ```
 
 The output voltages were measured with the DAC test build at those four values; the table in `software/src/analogout.cpp` converts volts to DAC values per output, which keeps quantized notes in tune (each output spans about 0–8.2 V).

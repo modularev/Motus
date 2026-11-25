@@ -236,7 +236,7 @@ struct Lfo
 };
 static Lfo lfo[NUM_SLIDERS];
 
-// CTRL, after the mode, as in Zadar's CONTROL: the mode's output runs through
+// TIME, after the mode, as in Zadar's CONTROL: the mode's output runs through
 // a delay line (1 kHz) with feedback, is quantized again when the slider is
 // (a line fed partly back mixes values between notes), and glides with SLEW,
 // its rise and fall set apart by SLANT. Without DELAY it passes straight on.
@@ -975,7 +975,7 @@ int modesLfoLevel(int slider)
 {
     const SliderSettings &s = sliderSettings[slider];
     if (s.slewMs > 0 || s.delayMs > 0)
-        return modesOutputLevel(slider); // the waveform as CTRL changed it
+        return modesOutputLevel(slider); // the waveform as TIME changed it
     return lroundf(lfoShape(slider, lfoPhase(slider)) * lfoDepth(slider) * 1023.0f);
 }
 
@@ -1034,7 +1034,7 @@ const char *modesSliderText(int slider)
         snprintf(text, sizeof(text), "%s%u", NOTE_NAMES[semitone % 12], (unsigned)(semitone / 12) % 10);
     }
     else
-        snprintf(text, sizeof(text), "%.2fV", ctl[slider].x); // what the finger plays, before CTRL
+        snprintf(text, sizeof(text), "%.2fV", ctl[slider].x); // what the finger plays, before TIME
     return text;
 }
 

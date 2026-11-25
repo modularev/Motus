@@ -3,12 +3,12 @@
 
 #include <stdint.h>
 
-// Menu: a tap on SET 1-4 opens the PLAY, OUT, CTRL and SEQ (with SYS) pages, a double
-// tap starts or stops that pad's sequencer row, and holding it opens the row's
-// step view; holding it there opens the row's settings. The encoder scrolls,
-// FINE held while turning changes a value, and touching a slider selects which
-// slider is edited. FINE toggles small steps, a double tap runs or stops all
-// rows. LOAD and SAVE restore and store patches.
+// Menu: a tap on A-D opens the PLAY, OUT, TIME and SEQ pages, a double tap
+// starts or stops that row, and holding it opens the row's step view; holding
+// it there opens the row's settings. The encoder scrolls, EDIT held while
+// turning changes a value (a tap toggles fine steps), and touching a slider or
+// pad selects what is edited. RUN starts or stops all rows, held it opens SYS.
+// PATCH loads (tap) and saves (hold).
 
 // a slider was touched: it becomes the one edited
 void menuSelect(int slider);
@@ -18,9 +18,9 @@ void menuUpdate(uint8_t buttons);
 
 bool menuActive();
 int menuSelected(); // the slider being edited
-bool menuPadHeld(); // a SET pad is held: a slider touch only selects
+bool menuPadHeld(); // a row button A-D is held: a slider or pad touch only selects
 
-// the row's window is shown: shifting it with its SET pad held, or its DIR,
+// the row's window is shown: shifting it with its row button held, or its DIR,
 // SHIFT or LEN open in the row's settings
 bool menuShifting();
 

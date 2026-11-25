@@ -5,6 +5,7 @@
 
 #include "config.h"
 #include "modes.h"
+#include "pads.h"
 #include "presets.h"
 #include "recorder.h"
 #include "sequencer.h"
@@ -23,7 +24,8 @@ static const int SYSTEM_ADDRESS_V1 = SLOT_ADDRESS + NUM_SLOTS * SLOT_SIZE_V1;
 
 static const uint32_t DIRECTORY_MAGIC = 0x4D4F4432;    // "MOD2"
 static const uint32_t DIRECTORY_MAGIC_V1 = 0x4D4F4431; // "MOD1": slots of SLOT_SIZE_V1
-static const uint32_t SLOT_MAGIC = 0x4D4F5041;         // "MOPA": the slider settings packed, with CTRL
+static const uint32_t SLOT_MAGIC = 0x4D4F5042;         // "MOPB": with the XY pads' settings
+static const uint32_t SLOT_MAGIC_VA = 0x4D4F5041;      // "MOPA": the slider settings packed, with CTRL
 static const uint32_t SLOT_MAGIC_V9 = 0x4D4F5039;      // "MOP9": the slider settings as in memory, without CTRL
 static const uint32_t SLOT_MAGIC_V8 = 0x4D4F5038;      // "MOP8": without the row speeds
 static const uint32_t SLOT_MAGIC_V7 = 0x4D4F5037;      // "MOP7": the stages in cents
@@ -52,6 +54,7 @@ struct Slot
     uint16_t presets[NUM_PRESETS][NUM_VARS];
     SliderSettings sliders[NUM_SLIDERS];
     SeqSettings sequencer;
+    PadSettings pads[NUM_PADS];
 };
 
 // a slider's settings as stored: packed, so a slot still fits its 256 bytes
@@ -74,6 +77,7 @@ struct StoredSlot
     uint16_t presets[NUM_PRESETS][NUM_VARS];
     StoredSlider sliders[NUM_SLIDERS];
     SeqSettings sequencer;
+    PadSettings pads[NUM_PADS]; // not in MOPA slots
 };
 static_assert(sizeof(StoredSlot) <= SLOT_SIZE, "a slot does not fit its EEPROM space");
 
@@ -85,6 +89,16 @@ struct SlotV9
     SliderSettingsV9 sliders[NUM_SLIDERS];
     SeqSettings sequencer;
 };
+
+// the pads as they start: XY
+static void defaultPads(Slot &slot)
+{
+    PadSettings current[NUM_PADS];
+    memcpy(current, padSettings, sizeof(current));
+    padsDefaults();
+    memcpy(slot.pads, padSettings, sizeof(slot.pads));
+    memcpy(padSettings, current, sizeof(current));
+}
 
 static StoredSlot encode(const Slot &slot)
 {
@@ -117,6 +131,7 @@ static StoredSlot encode(const Slot &slot)
         p.delayMs = s.delayMs;
     }
     stored.sequencer = slot.sequencer;
+    memcpy(stored.pads, slot.pads, sizeof(stored.pads));
     return stored;
 }
 
@@ -150,6 +165,10 @@ static void decodeStored(const StoredSlot &stored, Slot &slot)
         s.delayMs = p.delayMs;
     }
     slot.sequencer = stored.sequencer;
+    if (stored.magic == SLOT_MAGIC)
+        memcpy(slot.pads, stored.pads, sizeof(slot.pads));
+    else
+        defaultPads(slot);
 }
 
 struct SystemStore
@@ -163,7 +182,7 @@ static const uint32_t AUTOSAVE_IDLE_MS = 10000; // untouched this long, changes 
 static const uint32_t AUTOSAVE_CHECK_MS = 1000;
 
 static Directory directory;
-static bool autosaveAllowed = true; // not over a slot after a template, until SAVE or LOAD
+static bool autosaveAllowed = true; // not over a slot after a template, until a save or load
 static Slot saved;                // the current slot as saved, for the unsaved marker
 static SystemSettings savedSystem;
 
@@ -181,6 +200,7 @@ static void capture(Slot &slot)
     presetsGetAll(slot.presets);
     memcpy(slot.sliders, sliderSettings, sizeof(slot.sliders));
     slot.sequencer = seqSettings;
+    memcpy(slot.pads, padSettings, sizeof(slot.pads));
 }
 
 static void writeSystem()
@@ -206,6 +226,7 @@ void storageSetup()
         savedSystem = systemSettings;
 
         modesDefaults();
+        padsDefaults();
         if (!storageLoad(directory.current))
             capture(saved);
         return;
@@ -219,6 +240,7 @@ void storageSetup()
     directory.magic = DIRECTORY_MAGIC;
 
     modesLoadLegacy(); // the defaults when there is no earlier save
+    padsDefaults();
     if (legacy == LEGACY_MAGIC)
     {
         presetsLoadLegacy();
@@ -322,6 +344,7 @@ static bool decodeSlotV9(const uint8_t *raw, Slot &result)
     for (int i = 0; i < NUM_SLIDERS; i++)
         result.sliders[i] = modesFromV9(slot.sliders[i]);
     result.sequencer = slot.sequencer;
+    defaultPads(result);
     return true;
 }
 
@@ -330,7 +353,7 @@ static bool decodeSlot(const uint8_t *raw, Slot &result)
 {
     uint32_t magic;
     memcpy(&magic, raw, sizeof(magic));
-    if (magic != SLOT_MAGIC)
+    if (magic != SLOT_MAGIC && magic != SLOT_MAGIC_VA)
         return decodeSlotV9(raw, result);
     StoredSlot stored;
     memcpy(&stored, raw, sizeof(stored));
@@ -379,6 +402,7 @@ bool storageLoad(int slot)
     presetsSetAll(loaded.presets);
     memcpy(sliderSettings, loaded.sliders, sizeof(loaded.sliders));
     seqSettings = loaded.sequencer;
+    memcpy(padSettings, loaded.pads, sizeof(loaded.pads));
     saved = loaded;
 
     directory.current = slot;
@@ -394,6 +418,7 @@ bool storageUnsaved()
     return memcmp(now.presets, saved.presets, sizeof(now.presets)) != 0 ||
            memcmp(now.sliders, saved.sliders, sizeof(now.sliders)) != 0 ||
            memcmp(&now.sequencer, &saved.sequencer, sizeof(now.sequencer)) != 0 ||
+           memcmp(now.pads, saved.pads, sizeof(now.pads)) != 0 ||
            memcmp(&systemSettings, &savedSystem, sizeof(savedSystem)) != 0;
 }
 
@@ -444,6 +469,7 @@ void storageLoadTemplate(int index)
 {
     autosaveAllowed = false;
     modesDefaults(); // faders: 0-8 V
+    padsDefaults();  // the pads: XY
     for (int slider = 0; slider < NUM_SLIDERS; slider++)
     {
         SliderSettings &s = sliderSettings[slider];

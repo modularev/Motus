@@ -11,7 +11,7 @@ static const int MAX_SAMPLES = 2000;        // 20 s per control
 static const int MIN_SAMPLES = 5;           // shorter recordings are dropped
 static const uint32_t RETRIGGER_MS = 10;    // a gate held across the loop start drops for this long
 static const int JUMP = 100;                // a step this large between samples is a jump: played as a step
-static const uint32_t LONG_PRESS_DELAY_MS = 800;     // holding HOLD this long shows the stop-all bar
+static const uint32_t LONG_PRESS_DELAY_MS = 800;     // holding REC this long shows the stop-all bar
 static const uint32_t LONG_PRESS_PROGRESS_MS = 1500; // the bar fills in this time, then all loops stop
 static const uint32_t LOOP_START_MS = 80;   // how long recorderLoopStart reports a loop start
 
@@ -43,9 +43,9 @@ static bool armed = false;
 static int recording = -1; // the channel being recorded
 
 static bool holdDown = false;
-static bool holdUsed = false;  // the HOLD press did something else, so it is not a tap
-static bool holdArmed = false; // HOLD was pressed while armed or recording
-static bool momentary = false; // the recording runs while HOLD is held
+static bool holdUsed = false;  // the REC press did something else, so it is not a tap
+static bool holdArmed = false; // REC was pressed while armed or recording
+static bool momentary = false; // the recording runs while REC is held
 static uint32_t holdDownMs = 0;
 
 static bool ignoring[NUM_SENSORS]; // a touch that stopped a loop, until it lifts
@@ -96,13 +96,13 @@ static void startRecording(int channel)
     last[channel] = {0, 0, 0};
 }
 
-// HOLD: a tap arms, and when armed or recording exits (disarms, or closes the
-// loop). Held while not armed, a touched control records for as long as HOLD
+// REC: a tap arms, and when armed or recording exits (disarms, or closes the
+// loop). Held while not armed, a touched control records for as long as REC
 // is held. Held while armed or recording, a touched loop stops, and holding
 // on shows the stop-all bar.
 void recorderUpdate(uint8_t buttons)
 {
-    bool down = buttons & (1 << BUTTON_HOLD);
+    bool down = buttons & (1 << BUTTON_REC);
 
     if (down && !holdDown)
     {
@@ -136,7 +136,7 @@ void recorderUpdate(uint8_t buttons)
     {
         if (momentary)
         {
-            // the held recording ends with HOLD
+            // the held recording ends with REC
             finishRecording();
             momentary = false;
         }
@@ -200,7 +200,7 @@ Source recorderChannel(int channel, const TouchReading &reading, bool liveOverLo
     {
         if (holdDown && holdArmed)
         {
-            // armed, HOLD held + touch: stop this loop; the touch itself is ignored
+            // armed, REC held + touch: stop this loop; the touch itself is ignored
             if (state[channel] == LOOPING)
                 state[channel] = LIVE;
             holdUsed = true;
@@ -208,7 +208,7 @@ Source recorderChannel(int channel, const TouchReading &reading, bool liveOverLo
         }
         else if (holdDown && recording < 0)
         {
-            // not armed, HOLD held + touch: record while HOLD is held
+            // not armed, REC held + touch: record while REC is held
             startRecording(channel);
             momentary = true;
             holdUsed = true;

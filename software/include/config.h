@@ -13,18 +13,18 @@ constexpr int ELECTRODES_PER_PAD_AXIS = 6;
 
 // MPR121 ADDR lines driven by the MCP23017: the sensors above plus the button sensor
 constexpr int NUM_SENSOR_SELECT_LINES = 11;
-constexpr int BUTTON_SENSOR = 10; // touch buttons: set 1-4, fine, hold, load, save
+constexpr int BUTTON_SENSOR = 10; // touch buttons: A-D, EDIT, REC, RUN, PATCH
 
 enum Button
 {
-    BUTTON_SET_1,
-    BUTTON_SET_2,
-    BUTTON_SET_3,
-    BUTTON_SET_4,
-    BUTTON_FINE,
-    BUTTON_HOLD,
-    BUTTON_LOAD,
-    BUTTON_SAVE,
+    BUTTON_SET_1, // A · PLAY (labelled SET 1 on the original panel)
+    BUTTON_SET_2, // B · OUT  (SET 2)
+    BUTTON_SET_3, // C · TIME (SET 3)
+    BUTTON_SET_4, // D · SEQ  (SET 4)
+    BUTTON_EDIT,  // (FINE)
+    BUTTON_REC,   // (HOLD)
+    BUTTON_RUN,   // (LOAD)
+    BUTTON_PATCH, // (SAVE)
     NUM_BUTTONS
 };
 
